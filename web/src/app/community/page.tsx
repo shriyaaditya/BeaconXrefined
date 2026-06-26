@@ -1,4 +1,4 @@
-import LocalDisasterNews from '@/components/DisasterNews'
+import LocalDisasterNews from '@/components/reusable/DisasterNews'
 import React from 'react'
 
 export default function page() {

@@ -61,24 +61,24 @@ const NewsDashboard = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoadingNews, setIsLoadingNews] = useState<boolean>(true);
   const [newsError, setNewsError] = useState<string | null>(null);
-  
+
   const [airQuality, setAirQuality] = useState<AirQualityData | null>(null);
   const [isLoadingAQ, setIsLoadingAQ] = useState<boolean>(true);
   const [aqError, setAQError] = useState<string | null>(null);
-  
+
   const [location, setLocation] = useState<string>('Delhi');
   const [debouncedLocation, setDebouncedLocation] = useState<string>(location);
   const [userLocation, setUserLocation] = useState<string | null>(null);
   const [showMap, setShowMap] = useState<boolean>(true);
   const [selectedPoint, setSelectedPoint] = useState<MapPoint | null>(null);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
-  
-  
+
+
   const prevAqi = useRef<number | null>(null);
   const aqIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  
+
   const { isLoaded: mapsLoaded, loadError: mapLoadError } = useJsApiLoader({
     id: 'env-dashboard-map',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
@@ -162,19 +162,19 @@ const NewsDashboard = () => {
 
   const fetchAirQuality = useCallback(async () => {
     if (!debouncedLocation?.trim()) return;
-    
+
     setIsLoadingAQ(true);
     try {
       const geocodeResponse = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(debouncedLocation)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
       );
-      
+
       const geocodeData = await geocodeResponse.json();
-      
+
       if (!geocodeData.results || geocodeData.results.length === 0) {
         throw new Error('Location not found');
       }
-      
+
       const locationCoords = geocodeData.results[0].geometry.location;
       setMapCenter(locationCoords);
 
@@ -183,9 +183,9 @@ const NewsDashboard = () => {
         `https://api.waqi.info/feed/geo:${locationCoords.lat};${locationCoords.lng}/?token=${apiKey}`
       );
       const data = await response.json();
-      
+
       if (data.status !== 'ok') throw new Error('Invalid location or API error');
-      
+
       const pm25 = data.data.iaqi.pm25?.v || 0;
       const aqi = calculateUSAQI(pm25);
 
@@ -219,9 +219,9 @@ const NewsDashboard = () => {
 
   const fetchNews = useCallback(async () => {
     if (!debouncedLocation) return;
-    
+
     setIsLoadingNews(true);
-    try {      
+    try {
       const keywordQuery = airQuality?.aqi && airQuality.aqi > 150
         ? `("air quality" OR pollution OR smog)`
         : null;
@@ -235,7 +235,7 @@ const NewsDashboard = () => {
 
       const response = await fetch(apiUrl);
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(`GDELT API error: ${data}`);
       }
@@ -249,14 +249,14 @@ const NewsDashboard = () => {
         seendate?: string;
         webPublicationDate?: string;
       };
-    
-      
+
+
       const articles = Array.isArray(data.articles) ? data.articles : Array.isArray(data.results) ? data.results : [];
-  
+
       const transformedNews = articles.map((article: Article) => ({
         id: article.url || Math.random().toString(36).substring(2, 9),
         title: article.title || 'No title available',
-        description: article.domain 
+        description: article.domain
           ? `From ${article.domain}${article.sourcecountry ? ` (${article.sourcecountry})` : ''}`
           : 'No source information',
         source: article.domain || 'Unknown source',
@@ -264,11 +264,11 @@ const NewsDashboard = () => {
         publishedAt: article.seendate || article.webPublicationDate || new Date().toISOString(),
         category: 'general',
       }));
-  
+
       const airQualityNews: NewsItem = {
         id: `aq-${Date.now()}`,
         title: `${debouncedLocation} Air Quality - ${new Date().toLocaleTimeString()}`,
-        description: airQuality 
+        description: airQuality
           ? `Current AQI: ${airQuality.aqi} (${airQuality.category})`
           : 'Monitoring air quality...',
         source: 'Air Quality Monitor',
@@ -276,7 +276,7 @@ const NewsDashboard = () => {
         publishedAt: new Date().toISOString(),
         category: 'environment'
       };
-  
+
       setNews([airQualityNews, ...transformedNews]);
       setNewsError(null);
     } catch (error) {
@@ -292,7 +292,7 @@ const NewsDashboard = () => {
   useEffect(() => {
     fetchAirQuality();
     aqIntervalRef.current = setInterval(fetchAirQuality, 300000);
-  
+
     return () => {
       if (aqIntervalRef.current) {
         clearInterval(aqIntervalRef.current);
@@ -325,7 +325,7 @@ const NewsDashboard = () => {
     if (aqi <= 300) return 'bg-purple-100 text-purple-800';
     return 'bg-rose-100 text-rose-800';
   };
-  
+
   const getHealthRecommendation = useCallback((aqi: number): string => {
     if (aqi <= 50) return 'Good air quality - safe for outdoor activities';
     if (aqi <= 100) return 'Moderate air quality - acceptable for most people, but sensitive individuals should consider reducing prolonged outdoor exertion';
@@ -333,11 +333,11 @@ const NewsDashboard = () => {
     if (aqi <= 200) return 'Unhealthy - Everyone may begin to experience health effects; sensitive groups should avoid outdoor exertion';
     if (aqi <= 300) return 'Very Unhealthy - Health alert: everyone may experience more serious health effects. Avoid outdoor activities';
     return 'Hazardous - Health warnings of emergency conditions. Everyone should avoid all outdoor activities';
-  },[]);
+  }, []);
 
   const formatTime = (isoString: string): string => {
-    return new Date(isoString).toLocaleTimeString('en-GB', { 
-      hour: '2-digit', 
+    return new Date(isoString).toLocaleTimeString('en-GB', {
+      hour: '2-digit',
       minute: '2-digit'
     });
   };
@@ -358,15 +358,15 @@ const NewsDashboard = () => {
     if (!airQuality?.coordinates) return [];
 
     const { lat, lng } = airQuality.coordinates;
-    
+
     return Array.from({ length: 5 }, (_, i) => {
       const pointlat = lat + (Math.random() * 0.02 - 0.01);
       const pointlng = lng + (Math.random() * 0.02 - 0.01);
       const aqi = Math.max(0, Math.min(500, airQuality.aqi + (Math.random() * 20 - 10)));
-      
+
       return {
         id: `point-${i}`,
-        location: `Area ${i+1}`,
+        location: `Area ${i + 1}`,
         coordinates: { lat: pointlat, lng: pointlng },
         aqi,
         category: getAQICategory(aqi)
@@ -396,7 +396,7 @@ const NewsDashboard = () => {
               className="p-2 border border-gray-700 rounded bg-gray-800 text-gray-200 w-48 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
             {userLocation && (
-              <button 
+              <button
                 onClick={() => setLocation(userLocation)}
                 className="text-sm text-emerald-400 hover:text-emerald-300 hover:underline"
               >
@@ -404,8 +404,8 @@ const NewsDashboard = () => {
               </button>
             )}
           </div>
-          
-          <select 
+
+          <select
             onChange={handleHotspotSelect}
             className="p-2 border border-gray-700 rounded bg-gray-800 text-gray-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             value=""
@@ -423,7 +423,7 @@ const NewsDashboard = () => {
       <div className="border border-gray-800 rounded-lg overflow-hidden shadow-lg bg-gray-900">
         <div className="bg-gray-800 text-emerald-400 px-6 py-4 border-b border-gray-700">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Wind className="h-5 w-5 text-emerald-500" /> 
+            <Wind className="h-5 w-5 text-emerald-500" />
             Live Air Quality - {debouncedLocation}
             {airQuality && (
               <span className="ml-2 text-sm text-emerald-300">
@@ -449,8 +449,8 @@ const NewsDashboard = () => {
                     {airQuality.aqi}
                     {prevAqi.current !== null && (
                       <span className="ml-2 text-lg">
-                        {airQuality.aqi > prevAqi.current ? '↑' : 
-                         airQuality.aqi < prevAqi.current ? '↓' : '→'}
+                        {airQuality.aqi > prevAqi.current ? '↑' :
+                          airQuality.aqi < prevAqi.current ? '↓' : '→'}
                       </span>
                     )}
                   </div>
@@ -464,11 +464,10 @@ const NewsDashboard = () => {
                 <div className="grid grid-cols-2 gap-x-8 gap-y-2">
                   {Object.entries(airQuality.pollutants).map(([key, value]) => (
                     <div key={key} className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full mr-2 ${
-                        key === 'pm25' ? 'bg-blue-500' :
+                      <div className={`w-3 h-3 rounded-full mr-2 ${key === 'pm25' ? 'bg-blue-500' :
                         key === 'pm10' ? 'bg-green-500' :
-                        key === 'o3' ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}></div>
+                          key === 'o3' ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}></div>
                       <span className="text-sm text-gray-300">
                         {key.toUpperCase()}: {value} µg/m³
                       </span>
@@ -480,22 +479,22 @@ const NewsDashboard = () => {
                 <h3 className="font-medium mb-2 text-emerald-400">Health Guidance</h3>
                 <p className="text-gray-300">{memoizedHealthRecommendation}</p>
               </div>
-              
+
               <div className="p-4 border border-gray-700 rounded-lg">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-medium text-emerald-400">AQI Map for {airQuality.location}</h3>
-                  <button 
-                    onClick={() => setShowMap(!showMap)} 
+                  <button
+                    onClick={() => setShowMap(!showMap)}
                     className="text-emerald-400 text-sm hover:text-emerald-300 hover:underline flex items-center gap-1"
                   >
-                    <Map className="h-4 w-4" /> 
+                    <Map className="h-4 w-4" />
                     {showMap ? 'Hide Map' : 'Show Map'}
                   </button>
                 </div>
-                
+
                 {showMap && (
-                <ErrorBoundary fallback={<div className="text-red-400 p-4">Map failed to load</div>}>
-             
+                  <ErrorBoundary fallback={<div className="text-red-400 p-4">Map failed to load</div>}>
+
                     {mapsLoaded ? (
                       <GoogleMap
                         mapContainerStyle={mapContainerStyle}
@@ -533,9 +532,9 @@ const NewsDashboard = () => {
                         )}
 
                         {mapPoints.map((point) => (
-                          <Marker 
-                            key={point.id} 
-                            position={point.coordinates} 
+                          <Marker
+                            key={point.id}
+                            position={point.coordinates}
                             icon={{
                               path: google.maps.SymbolPath.CIRCLE,
                               scale: 8,
@@ -567,17 +566,17 @@ const NewsDashboard = () => {
                         {mapLoadError ? 'Failed to load map' : 'Loading map...'}
                       </div>
                     )}
-                      </ErrorBoundary>
-                      )}
-                    </div>
-                  </div>
-            ) : (
+                  </ErrorBoundary>
+                )}
+              </div>
+            </div>
+          ) : (
             <div className="text-center p-6 text-gray-400">No air quality data</div>
           )}
         </div>
       </div>
 
-<motion.div
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
@@ -601,7 +600,7 @@ const NewsDashboard = () => {
           ) : news.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <AnimatePresence>
-                {news.slice(0,10).map((item) => (
+                {news.slice(0, 10).map((item) => (
                   <motion.div
                     key={item.id}
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -614,9 +613,8 @@ const NewsDashboard = () => {
                       href={item.url === "#" ? undefined : item.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`block h-full border border-gray-700 rounded-xl p-4 ${
-                        item.url === "#" ? "cursor-default" : "hover:bg-gray-800"
-                      } transition-all bg-gray-900`}
+                      className={`block h-full border border-gray-700 rounded-xl p-4 ${item.url === "#" ? "cursor-default" : "hover:bg-gray-800"
+                        } transition-all bg-gray-900`}
                     >
                       <div className="flex flex-col h-full">
                         <div className="flex-1">

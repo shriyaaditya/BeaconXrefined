@@ -3,7 +3,7 @@
 import './global.css';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import Chatbutton from '@/components/ChatButton';
+import Chatbutton from '@/components/chatbot/ChatButton';
 import Icon from '@/components/Icon';
 import { usePathname } from 'next/navigation';
 
@@ -28,7 +28,7 @@ export default function RootLayout({
         {!isAuthPage && <Navbar />}
         <main className="flex-1">
           {children}
-        </main>        
+        </main>
         {!isAuthPage && <Icon disasters={sampleDisasters} />}
         {!isAuthPage && <Chatbutton />}
         {!isAuthPage && <Footer />}

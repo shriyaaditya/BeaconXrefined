@@ -4,13 +4,13 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { AlertCircle, MapPin, Navigation, Loader } from "lucide-react"
 import dynamic from "next/dynamic"
-const MapBox = dynamic(() => import("@/components/MapBox"), { ssr: false })
+const MapBox = dynamic(() => import("@/components/map/MapBox"), { ssr: false })
 
 export default function HeroSection() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [isLoadingLocation, setIsLoadingLocation] = useState(false)
-  
+
 
   const getLocation = () => {
     if (typeof navigator === "undefined") return
@@ -43,7 +43,7 @@ export default function HeroSection() {
 
   return (
     <div className="w-screen overflow-hidden relative">
-      
+
       <div className="bg-teal-100">
         <div className="container mx-auto px-4 md:py-16 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -112,7 +112,7 @@ export default function HeroSection() {
                 ) : location ? (
                   <>
                     <div className="absolute inset-0 bg-teal-800/50 flex items-center justify-center">
-                    <MapBox center={location} zoom={6} mapTypeId="roadmap" />
+                      <MapBox center={location} zoom={6} mapTypeId="roadmap" />
                     </div>
 
                     <div className="absolute bottom-0 left-0 right-0 bg-teal-900/80 text-teal-100 p-2 text-xs flex justify-between">
