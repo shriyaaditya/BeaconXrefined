@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Menu, X, UserPlus, LogOut, Home, BookOpen, Users, Info } from "lucide-react"
+import { Menu, X, UserPlus, LogOut, Home, BookOpen, Users, Info, Activity } from "lucide-react"
 import { usePathname, useRouter} from "next/navigation"
 import { useAuth } from "@/hooks/useAuth";
 
@@ -18,7 +18,7 @@ export default function Navbar() {
   const navLinks = [
     ...(user ? [] : [ { name: "Home", path: "/", icon: <Home className="h-5 w-5" /> } ]),
     { name: "Dashboard", path: "/dashboard", icon: <Home className="h-5 w-5" /> },
-    { name: "SurvivalGuide", path: "/guide", icon: <BookOpen className="h-5 w-5" /> },
+    { name: "Analyse", path: "/analyze", icon: <Activity className="h-5 w-5" /> },
     ...(user ? [
       { name: "AirFeed", path: "/community", icon: <Users className="h-5 w-5" /> },
     ] : []),

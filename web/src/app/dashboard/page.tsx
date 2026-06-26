@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { io } from "socket.io-client";
 import {
   MapPin,
   Activity,
@@ -178,20 +179,36 @@ export default function Dashboard() {
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  // Setup periodic polling & initial fetch
+  // Setup Socket.IO real-time listener & periodic polling loop fallback
   useEffect(() => {
     if (!user) return;
 
     fetchInventoryData();
     fetchSimulatorStatus();
 
-    // 5-second polling loop
+    // Connect to Socket.IO backend
+    const socket = io(apiBase);
+
+    socket.on("connect", () => {
+      console.log("[SOCKET] Connected to real-time event grid");
+    });
+
+    socket.on("inventory-updated", (data) => {
+      console.log("[SOCKET] Real-time inventory-updated event received:", data);
+      // Instantly refresh dashboard visuals
+      fetchInventoryData();
+    });
+
+    // 5-second polling loop as fallback
     const pollInterval = setInterval(() => {
       fetchInventoryData();
       fetchSimulatorStatus();
     }, 5000);
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      socket.disconnect();
+      clearInterval(pollInterval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 

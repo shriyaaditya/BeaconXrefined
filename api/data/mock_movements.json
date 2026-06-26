@@ -1,5 +1,49 @@
 [
   {
+    "id": "mvt-1781484760427-155",
+    "timestamp": "2026-06-15T00:52:38.698Z",
+    "center_id": "wh-pune-001",
+    "center_name": "Pune Central Relief Hub",
+    "item_code": "IDRN-SHT-401",
+    "item_name": "Family Relief Tent (Waterproof, 6-person)",
+    "type": "restock",
+    "quantity": 15,
+    "details": "Adjusted 15 units of Family Relief Tent (Waterproof, 6-person) at Pune Central Relief Hub."
+  },
+  {
+    "id": "mvt-1781254684390-233",
+    "timestamp": "2026-06-12T08:58:03.116Z",
+    "center_id": "wh-mum-sub-001",
+    "center_name": "Mumbai Suburban EOC Depot (Bandra)",
+    "item_code": "IDRN-FOD-501",
+    "item_name": "Ready-to-Eat Meal Ration Packets",
+    "type": "dispatch",
+    "quantity": -499,
+    "details": "Adjusted 499 units of Ready-to-Eat Meal Ration Packets at Mumbai Suburban EOC Depot (Bandra)."
+  },
+  {
+    "id": "mvt-1781253624614-392",
+    "timestamp": "2026-06-12T08:40:23.503Z",
+    "center_id": "wh-mum-sub-001",
+    "center_name": "Mumbai Suburban EOC Depot (Bandra)",
+    "item_code": "IDRN-FOD-501",
+    "item_name": "Ready-to-Eat Meal Ration Packets",
+    "type": "dispatch",
+    "quantity": -1255,
+    "details": "Adjusted 1255 units of Ready-to-Eat Meal Ration Packets at Mumbai Suburban EOC Depot (Bandra)."
+  },
+  {
+    "id": "mvt-1781253366674-88",
+    "timestamp": "2026-06-12T08:36:05.693Z",
+    "center_id": "wh-mum-sub-001",
+    "center_name": "Mumbai Suburban EOC Depot (Bandra)",
+    "item_code": "IDRN-RE-001",
+    "item_name": "Inflatable Gemini Rescue Boat (6-Person)",
+    "type": "restock",
+    "quantity": 33,
+    "details": "Adjusted 33 units of Inflatable Gemini Rescue Boat (6-Person) at Mumbai Suburban EOC Depot (Bandra)."
+  },
+  {
     "id": "mvt-1780753948142-542",
     "timestamp": "2026-06-06T13:52:28.140Z",
     "center_id": "wh-pune-001",
@@ -1074,51 +1118,5 @@
     "type": "consume",
     "quantity": -20,
     "details": "Adjusted 20 units of Lifebuoy Ring with Grab Line at Alibag Coast Guard Relief Station."
-  },
-  {
-    "id": "mvt-1780753433015-843",
-    "timestamp": "2026-06-06T13:43:53.013Z",
-    "center_id": "wh-thane-003",
-    "center_name": "Mira-Bhayandar Emergency Store",
-    "item_code": "IDRN-WAT-301",
-    "item_name": "High-Capacity Diesel Water Pump (5 HP)",
-    "type": "consume",
-    "quantity": -8,
-    "details": "Adjusted 8 units of High-Capacity Diesel Water Pump (5 HP) at Mira-Bhayandar Emergency Store."
-  },
-  {
-    "id": "mvt-1780753428012-146",
-    "timestamp": "2026-06-06T13:43:48.011Z",
-    "center_id": "wh-ratna-002",
-    "center_name": "Chiplun Flood Response Depot",
-    "target_center_id": "wh-ratna-001",
-    "target_center_name": "Ratnagiri Port Emergency Store",
-    "item_code": "IDRN-RE-003",
-    "item_name": "Life Jacket (Adult, high-buoyancy)",
-    "type": "transfer",
-    "quantity": 3,
-    "details": "Transferred 3 units of Life Jacket (Adult, high-buoyancy) from Chiplun Flood Response Depot to Ratnagiri Port Emergency Store."
-  },
-  {
-    "id": "mvt-1780753423014-665",
-    "timestamp": "2026-06-06T13:43:43.012Z",
-    "center_id": "wh-ratna-003",
-    "center_name": "Guhagar Cyclone Shelter Hub",
-    "item_code": "IDRN-RE-001",
-    "item_name": "Inflatable Gemini Rescue Boat (6-Person)",
-    "type": "consume",
-    "quantity": -6,
-    "details": "Adjusted 6 units of Inflatable Gemini Rescue Boat (6-Person) at Guhagar Cyclone Shelter Hub."
-  },
-  {
-    "id": "mvt-1780753418022-619",
-    "timestamp": "2026-06-06T13:43:38.019Z",
-    "center_id": "wh-pune-003",
-    "center_name": "Haveli Sub-divisional Base",
-    "item_code": "IDRN-MED-103",
-    "item_name": "Emergency Stretcher (Foldable)",
-    "type": "spike",
-    "quantity": -9,
-    "details": "Emergency drawdown (disaster spike) 9 units of Emergency Stretcher (Foldable) at Haveli Sub-divisional Base."
   }
 ]

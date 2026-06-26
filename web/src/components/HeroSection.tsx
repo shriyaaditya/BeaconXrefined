@@ -127,7 +127,6 @@ export default function HeroSection() {
 
           {/* Safety Status */}
           <div className="mt-8 rounded-lg p-4 max-w-3xl mx-auto">
-            <h3 className="text-teal-800 font-bold mb-2">Your Area Safety Status</h3>
             <div className="h-2 bg-teal-900 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 w-3/4" />
             </div>
