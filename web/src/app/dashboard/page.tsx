@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 // Dynamically import Leaflet Map to avoid SSR errors
-const WarehouseMap = dynamic(() => import("@/components/WarehouseMap"), {
+const WarehouseMap = dynamic(() => import("@/components/analysis/WarehouseMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full min-h-[500px] bg-[#070b19] border border-slate-800 rounded-2xl flex items-center justify-center text-teal-400 shadow-2xl">
@@ -219,7 +219,7 @@ export default function Dashboard() {
       setManualCenterId((prev) => prev || defaultCenter.center_id);
       setManualSourceId((prev) => prev || defaultCenter.center_id);
       setManualTargetId((prev) => prev || (centers[1] ? centers[1].center_id : defaultCenter.center_id));
-      
+
       const defaultResource = defaultCenter.resources[0];
       setManualItemCode((prev) => prev || (defaultResource ? defaultResource.item_code : ""));
     }
@@ -376,8 +376,8 @@ export default function Dashboard() {
   // Filter movements for selected warehouse
   const filteredMovements = selectedCenterId
     ? movements.filter(
-        (m) => m.center_id === selectedCenterId || m.target_center_id === selectedCenterId
-      )
+      (m) => m.center_id === selectedCenterId || m.target_center_id === selectedCenterId
+    )
     : movements;
 
   // Manual Trigger helper resource options
@@ -399,7 +399,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#070b19] text-slate-100 flex flex-col font-sans">
-      
+
       {/* 1. Header Navigation Bar */}
       <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-[1000] shadow-lg">
         <div className="flex items-center space-x-3">
@@ -423,30 +423,28 @@ export default function Dashboard() {
         <div className="flex items-center space-x-3">
           {/* Simulator status banner */}
           <div
-            className={`px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center space-x-2 border transition-colors ${
-              simStatus.mode === "simulation"
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center space-x-2 border transition-colors ${simStatus.mode === "simulation"
                 ? "bg-emerald-950/40 text-emerald-400 border-emerald-900/50"
                 : simStatus.mode === "scenario"
-                ? "bg-amber-950/40 text-amber-400 border-amber-900/50 animate-pulse"
-                : "bg-slate-900/40 text-slate-400 border-slate-800"
-            }`}
+                  ? "bg-amber-950/40 text-amber-400 border-amber-900/50 animate-pulse"
+                  : "bg-slate-900/40 text-slate-400 border-slate-800"
+              }`}
           >
             <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                simStatus.mode === "simulation"
+              className={`h-1.5 w-1.5 rounded-full ${simStatus.mode === "simulation"
                   ? "bg-emerald-500 animate-ping"
                   : simStatus.mode === "scenario"
-                  ? "bg-amber-500 animate-ping"
-                  : "bg-slate-500"
-              }`}
+                    ? "bg-amber-500 animate-ping"
+                    : "bg-slate-500"
+                }`}
             ></span>
             <span>
               Gateway:{" "}
               {simStatus.mode === "simulation"
                 ? `AUTO (${simStatus.intervalSeconds}s)`
                 : simStatus.mode === "scenario"
-                ? `SCENARIO (${simStatus.scenario.toUpperCase()})`
-                : "PAUSED"}
+                  ? `SCENARIO (${simStatus.scenario.toUpperCase()})`
+                  : "PAUSED"}
             </span>
           </div>
 
@@ -473,27 +471,26 @@ export default function Dashboard() {
 
       {/* 2. Main Workspace Layout */}
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 overflow-hidden">
-        
+
         {/* LEFT & CENTER VIEWPORT: The Map & District View Selectors (Col span 7) */}
         <section className="lg:col-span-7 flex flex-col space-y-4 h-full min-h-[500px]">
-          
+
           {/* Map Filters & Controls */}
           <div className="bg-slate-900/50 border border-slate-800 p-3 rounded-2xl flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center space-x-2">
               <Layers className="h-4 w-4 text-teal-400" />
               <span className="text-xs font-bold text-slate-300">District Focus:</span>
             </div>
-            
+
             <div className="flex flex-wrap gap-1.5">
               {Object.keys(DISTRICT_COORDINATES).map((dist) => (
                 <button
                   key={dist}
                   onClick={() => handleDistrictChange(dist)}
-                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${
-                    selectedDistrict === dist
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${selectedDistrict === dist
                       ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/10"
                       : "bg-slate-850 text-slate-400 hover:bg-slate-800 hover:text-white"
-                  }`}
+                    }`}
                 >
                   {dist}
                 </button>
@@ -518,12 +515,12 @@ export default function Dashboard() {
               <MapPin className="h-3.5 w-3.5 text-teal-400" />
               <span>District Node Registry ({filteredCenters.length})</span>
             </h3>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {filteredCenters.map((c) => {
                 const isSelected = selectedCenterId === c.center_id;
                 const score = c.readiness_score || 0;
-                
+
                 let scoreBadge = "bg-emerald-950/40 text-emerald-400 border-emerald-900/50";
                 if (score < 50) {
                   scoreBadge = "bg-red-955 text-red-400 border-red-900/50";
@@ -535,11 +532,10 @@ export default function Dashboard() {
                   <div
                     key={c.center_id}
                     onClick={() => handleSelectCenter(c.center_id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                      isSelected
+                    className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${isSelected
                         ? "bg-teal-950/20 border-teal-500 shadow-md shadow-teal-500/5"
                         : "bg-slate-900/60 border-slate-850 hover:bg-slate-850 hover:border-slate-700"
-                    }`}
+                      }`}
                   >
                     <div>
                       <p className="font-extrabold text-[11px] text-white truncate">
@@ -565,11 +561,11 @@ export default function Dashboard() {
 
         {/* RIGHT SIDEBAR PANEL: Intelligence, Details & Controls (Col span 5) */}
         <section className="lg:col-span-5 flex flex-col space-y-6 overflow-y-auto max-h-[85vh] pr-1">
-          
+
           {selectedCenter ? (
             /* WAREHOUSE INTELLIGENCE VIEW (Selected State) */
             <div className="space-y-6">
-              
+
               {/* Back to Network button */}
               <button
                 onClick={handleBackToOverview}
@@ -584,7 +580,7 @@ export default function Dashboard() {
                 <div className="absolute right-4 top-4 opacity-5 text-slate-400">
                   <MapPin className="h-24 w-24" />
                 </div>
-                
+
                 <div className="flex items-start justify-between">
                   <div>
                     <span className="text-[9px] font-black text-slate-500 bg-slate-950 border border-slate-850 px-2 py-0.5 rounded uppercase tracking-wider">
@@ -599,13 +595,12 @@ export default function Dashboard() {
                   </div>
 
                   <div className="text-right flex flex-col items-end">
-                    <span className={`px-3 py-1 rounded-xl text-xs font-black border shadow-lg ${
-                      selectedCenter.readiness_score !== undefined && selectedCenter.readiness_score >= 80
+                    <span className={`px-3 py-1 rounded-xl text-xs font-black border shadow-lg ${selectedCenter.readiness_score !== undefined && selectedCenter.readiness_score >= 80
                         ? "bg-emerald-950/50 text-emerald-400 border-emerald-900/60"
                         : selectedCenter.readiness_score !== undefined && selectedCenter.readiness_score >= 50
-                        ? "bg-amber-950/50 text-amber-400 border-amber-900/60"
-                        : "bg-red-955 text-red-400 border-red-900/60 animate-pulse"
-                    }`}>
+                          ? "bg-amber-950/50 text-amber-400 border-amber-900/60"
+                          : "bg-red-955 text-red-400 border-red-900/60 animate-pulse"
+                      }`}>
                       Readiness: {selectedCenter.readiness_score}%
                     </span>
                     <span className="text-[9px] text-slate-500 mt-1.5 flex items-center space-x-1">
@@ -631,11 +626,10 @@ export default function Dashboard() {
                     return (
                       <div
                         key={res.item_code}
-                        className={`p-3 rounded-xl border transition-all ${
-                          isCritical
+                        className={`p-3 rounded-xl border transition-all ${isCritical
                             ? "bg-red-955/20 border-red-900/30 hover:border-red-900/50"
                             : "bg-slate-950/40 border-slate-850 hover:border-slate-800"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start justify-between">
                           <div>
@@ -672,9 +666,8 @@ export default function Dashboard() {
                           <div className="flex-1 mr-4">
                             <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${
-                                  isCritical ? "bg-red-500" : pct < 130 ? "bg-yellow-500" : "bg-emerald-500"
-                                }`}
+                                className={`h-full rounded-full ${isCritical ? "bg-red-500" : pct < 130 ? "bg-yellow-500" : "bg-emerald-500"
+                                  }`}
                                 style={{ width: `${Math.min(pct, 100)}%` }}
                               ></div>
                             </div>
@@ -736,9 +729,8 @@ export default function Dashboard() {
                         </div>
 
                         <div className="text-right">
-                          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-lg ${
-                            isDanger ? "bg-red-955 border border-red-900/30" : "bg-slate-950"
-                          } ${textClass}`}>
+                          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-lg ${isDanger ? "bg-red-955 border border-red-900/30" : "bg-slate-950"
+                            } ${textClass}`}>
                             {runoutStr}
                           </span>
                         </div>
@@ -817,11 +809,10 @@ export default function Dashboard() {
                   </div>
 
                   {formMessage && (
-                    <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${
-                      formMessage.type === "success"
+                    <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${formMessage.type === "success"
                         ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/40"
                         : "bg-red-955 text-red-400 border-red-900/40"
-                    }`}>
+                      }`}>
                       <span>{formMessage.type === "success" ? "✔" : "❌"}</span>
                       <span className="flex-1">{formMessage.text}</span>
                     </div>
@@ -861,15 +852,14 @@ export default function Dashboard() {
                         <div key={m.id} className="border-b border-slate-850 pb-2.5 last:border-b-0 text-[11px]">
                           <div className="flex items-center justify-between text-[9px] text-slate-500 mb-1">
                             <span>{timeStr}</span>
-                            <span className={`px-1.5 py-0.2 rounded font-extrabold uppercase text-[7px] ${
-                              m.type === "replenish"
+                            <span className={`px-1.5 py-0.2 rounded font-extrabold uppercase text-[7px] ${m.type === "replenish"
                                 ? "bg-emerald-950 text-emerald-400 border border-emerald-900/30"
                                 : m.type === "transfer"
-                                ? "bg-sky-950 text-sky-400 border border-sky-900/30"
-                                : m.type === "spike"
-                                ? "bg-red-955 text-red-400 border border-red-900/30"
-                                : "bg-yellow-950 text-yellow-400 border border-yellow-900/30"
-                            }`}>
+                                  ? "bg-sky-950 text-sky-400 border border-sky-900/30"
+                                  : m.type === "spike"
+                                    ? "bg-red-955 text-red-400 border border-red-900/30"
+                                    : "bg-yellow-950 text-yellow-400 border border-yellow-900/30"
+                              }`}>
                               {m.type}
                             </span>
                           </div>
@@ -885,7 +875,7 @@ export default function Dashboard() {
           ) : (
             /* DEFAULT EOC STATE (No Warehouse Selected) */
             <div className="space-y-6">
-              
+
               {/* Tab Selector */}
               <div className="flex bg-slate-950 border border-slate-850 p-1.5 rounded-2xl">
                 <button
@@ -893,11 +883,10 @@ export default function Dashboard() {
                     setActiveTab("status");
                     setFormMessage(null);
                   }}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 ${
-                    activeTab === "status"
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 ${activeTab === "status"
                       ? "bg-teal-500 text-slate-950 shadow-md"
                       : "text-slate-400 hover:text-white"
-                  }`}
+                    }`}
                 >
                   <Activity className="h-3.5 w-3.5" />
                   <span>Network Logistics Feed</span>
@@ -907,11 +896,10 @@ export default function Dashboard() {
                     setActiveTab("control");
                     setFormMessage(null);
                   }}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 ${
-                    activeTab === "control"
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 ${activeTab === "control"
                       ? "bg-teal-500 text-slate-950 shadow-md"
                       : "text-slate-400 hover:text-white"
-                  }`}
+                    }`}
                 >
                   <Sliders className="h-3.5 w-3.5" />
                   <span>EOC Simulator Control</span>
@@ -921,7 +909,7 @@ export default function Dashboard() {
               {activeTab === "status" ? (
                 /* TAB 1: Network Logistics Feed */
                 <div className="space-y-6">
-                  
+
                   {/* Grid of EOC Metrics */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl relative overflow-hidden">
@@ -1026,15 +1014,14 @@ export default function Dashboard() {
                             <div key={m.id} className="border-b border-slate-850 pb-2.5 last:border-b-0 text-[11px]">
                               <div className="flex items-center justify-between text-[9px] text-slate-500 mb-1">
                                 <span>{dateStr}</span>
-                                <span className={`px-1.5 py-0.2 rounded font-extrabold uppercase text-[7px] ${
-                                  m.type === "replenish"
+                                <span className={`px-1.5 py-0.2 rounded font-extrabold uppercase text-[7px] ${m.type === "replenish"
                                     ? "bg-emerald-950 text-emerald-400 border border-emerald-900/30"
                                     : m.type === "transfer"
-                                    ? "bg-sky-950 text-sky-400 border border-sky-900/30"
-                                    : m.type === "spike"
-                                    ? "bg-red-955 text-red-400 border border-red-900/30"
-                                    : "bg-yellow-950 text-yellow-400 border border-yellow-900/30"
-                                }`}>
+                                      ? "bg-sky-950 text-sky-400 border border-sky-900/30"
+                                      : m.type === "spike"
+                                        ? "bg-red-955 text-red-400 border border-red-900/30"
+                                        : "bg-yellow-950 text-yellow-400 border border-yellow-900/30"
+                                  }`}>
                                   {m.type}
                                 </span>
                               </div>
@@ -1050,7 +1037,7 @@ export default function Dashboard() {
               ) : (
                 /* TAB 2: EOC Simulator Control Panel */
                 <div className="space-y-6">
-                  
+
                   {/* Configuration Board */}
                   <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
                     <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-800 pb-3 mb-4 flex items-center space-x-2">
@@ -1063,27 +1050,24 @@ export default function Dashboard() {
                       <button
                         type="button"
                         onClick={() => setSimMode("static")}
-                        className={`py-2 rounded-lg transition-all ${
-                          simMode === "static" ? "bg-teal-500 text-slate-950" : "text-slate-400 hover:text-white"
-                        }`}
+                        className={`py-2 rounded-lg transition-all ${simMode === "static" ? "bg-teal-500 text-slate-950" : "text-slate-400 hover:text-white"
+                          }`}
                       >
                         PAUSED
                       </button>
                       <button
                         type="button"
                         onClick={() => setSimMode("simulation")}
-                        className={`py-2 rounded-lg transition-all ${
-                          simMode === "simulation" ? "bg-teal-500 text-slate-950" : "text-slate-400 hover:text-white"
-                        }`}
+                        className={`py-2 rounded-lg transition-all ${simMode === "simulation" ? "bg-teal-500 text-slate-950" : "text-slate-400 hover:text-white"
+                          }`}
                       >
                         AUTOMATED
                       </button>
                       <button
                         type="button"
                         onClick={() => setSimMode("scenario")}
-                        className={`py-2 rounded-lg transition-all ${
-                          simMode === "scenario" ? "bg-teal-500 text-slate-950" : "text-slate-400 hover:text-white"
-                        }`}
+                        className={`py-2 rounded-lg transition-all ${simMode === "scenario" ? "bg-teal-500 text-slate-950" : "text-slate-400 hover:text-white"
+                          }`}
                       >
                         DISASTER
                       </button>
@@ -1237,11 +1221,10 @@ export default function Dashboard() {
                       </div>
 
                       {formMessage && (
-                        <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${
-                          formMessage.type === "success"
+                        <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${formMessage.type === "success"
                             ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/40"
                             : "bg-red-955 text-red-400 border-red-900/40"
-                        }`}>
+                          }`}>
                           <span>{formMessage.type === "success" ? "✔" : "❌"}</span>
                           <span className="flex-1">{formMessage.text}</span>
                         </div>

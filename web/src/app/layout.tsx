@@ -1,10 +1,10 @@
 "use client"
 
 import './global.css';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import Navbar from '@/components/reusable/Navbar';
+import Footer from '@/components/reusable/Footer';
 import Chatbutton from '@/components/chatbot/ChatButton';
-import Icon from '@/components/Icon';
+import Icon from '@/components/reusable/Icon';
 import { usePathname } from 'next/navigation';
 
 export default function RootLayout({

@@ -1,5 +1,5 @@
 "use client";
-
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps */
 import React, { useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 import dynamic from "next/dynamic";

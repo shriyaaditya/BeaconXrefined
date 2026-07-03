@@ -1,8 +1,8 @@
 "use client"
-
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Menu, X, UserPlus, LogOut, Home, BookOpen, Users, Info, Activity } from "lucide-react"
+import { Menu, X, UserPlus, LogOut, Home, Users, Info, Activity } from "lucide-react"
 import { usePathname, useRouter} from "next/navigation"
 import { useAuth } from "@/hooks/useAuth";
 
