@@ -128,7 +128,7 @@ async function processInventoryUpdate(payload) {
         changeVal,
         pgAction,
         notes || `Queue update via ${actionType}`,
-        '00000000-0000-0000-0000-000000000001' // System admin user ID from seed
+        null // System/simulator generated event
       ]
     );
     

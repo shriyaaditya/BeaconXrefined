@@ -424,18 +424,18 @@ export default function Dashboard() {
           {/* Simulator status banner */}
           <div
             className={`px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center space-x-2 border transition-colors ${simStatus.mode === "simulation"
-                ? "bg-emerald-950/40 text-emerald-400 border-emerald-900/50"
-                : simStatus.mode === "scenario"
-                  ? "bg-amber-950/40 text-amber-400 border-amber-900/50 animate-pulse"
-                  : "bg-slate-900/40 text-slate-400 border-slate-800"
+              ? "bg-emerald-950/40 text-emerald-400 border-emerald-900/50"
+              : simStatus.mode === "scenario"
+                ? "bg-amber-950/40 text-amber-400 border-amber-900/50 animate-pulse"
+                : "bg-slate-900/40 text-slate-400 border-slate-800"
               }`}
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${simStatus.mode === "simulation"
-                  ? "bg-emerald-500 animate-ping"
-                  : simStatus.mode === "scenario"
-                    ? "bg-amber-500 animate-ping"
-                    : "bg-slate-500"
+                ? "bg-emerald-500 animate-ping"
+                : simStatus.mode === "scenario"
+                  ? "bg-amber-500 animate-ping"
+                  : "bg-slate-500"
                 }`}
             ></span>
             <span>
@@ -488,8 +488,8 @@ export default function Dashboard() {
                   key={dist}
                   onClick={() => handleDistrictChange(dist)}
                   className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all ${selectedDistrict === dist
-                      ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/10"
-                      : "bg-slate-850 text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/10"
+                    : "bg-slate-850 text-slate-400 hover:bg-slate-800 hover:text-white"
                     }`}
                 >
                   {dist}
@@ -533,8 +533,8 @@ export default function Dashboard() {
                     key={c.center_id}
                     onClick={() => handleSelectCenter(c.center_id)}
                     className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${isSelected
-                        ? "bg-teal-950/20 border-teal-500 shadow-md shadow-teal-500/5"
-                        : "bg-slate-900/60 border-slate-850 hover:bg-slate-850 hover:border-slate-700"
+                      ? "bg-teal-950/20 border-teal-500 shadow-md shadow-teal-500/5"
+                      : "bg-slate-900/60 border-slate-850 hover:bg-slate-850 hover:border-slate-700"
                       }`}
                   >
                     <div>
@@ -596,10 +596,10 @@ export default function Dashboard() {
 
                   <div className="text-right flex flex-col items-end">
                     <span className={`px-3 py-1 rounded-xl text-xs font-black border shadow-lg ${selectedCenter.readiness_score !== undefined && selectedCenter.readiness_score >= 80
-                        ? "bg-emerald-950/50 text-emerald-400 border-emerald-900/60"
-                        : selectedCenter.readiness_score !== undefined && selectedCenter.readiness_score >= 50
-                          ? "bg-amber-950/50 text-amber-400 border-amber-900/60"
-                          : "bg-red-955 text-red-400 border-red-900/60 animate-pulse"
+                      ? "bg-emerald-950/50 text-emerald-400 border-emerald-900/60"
+                      : selectedCenter.readiness_score !== undefined && selectedCenter.readiness_score >= 50
+                        ? "bg-amber-950/50 text-amber-400 border-amber-900/60"
+                        : "bg-red-955 text-red-400 border-red-900/60 animate-pulse"
                       }`}>
                       Readiness: {selectedCenter.readiness_score}%
                     </span>
@@ -627,8 +627,8 @@ export default function Dashboard() {
                       <div
                         key={res.item_code}
                         className={`p-3 rounded-xl border transition-all ${isCritical
-                            ? "bg-red-955/20 border-red-900/30 hover:border-red-900/50"
-                            : "bg-slate-950/40 border-slate-850 hover:border-slate-800"
+                          ? "bg-red-955/20 border-red-900/30 hover:border-red-900/50"
+                          : "bg-slate-950/40 border-slate-850 hover:border-slate-800"
                           }`}
                       >
                         <div className="flex items-start justify-between">
@@ -810,8 +810,8 @@ export default function Dashboard() {
 
                   {formMessage && (
                     <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${formMessage.type === "success"
-                        ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/40"
-                        : "bg-red-955 text-red-400 border-red-900/40"
+                      ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/40"
+                      : "bg-red-955 text-red-400 border-red-900/40"
                       }`}>
                       <span>{formMessage.type === "success" ? "✔" : "❌"}</span>
                       <span className="flex-1">{formMessage.text}</span>
@@ -853,12 +853,12 @@ export default function Dashboard() {
                           <div className="flex items-center justify-between text-[9px] text-slate-500 mb-1">
                             <span>{timeStr}</span>
                             <span className={`px-1.5 py-0.2 rounded font-extrabold uppercase text-[7px] ${m.type === "replenish"
-                                ? "bg-emerald-950 text-emerald-400 border border-emerald-900/30"
-                                : m.type === "transfer"
-                                  ? "bg-sky-950 text-sky-400 border border-sky-900/30"
-                                  : m.type === "spike"
-                                    ? "bg-red-955 text-red-400 border border-red-900/30"
-                                    : "bg-yellow-950 text-yellow-400 border border-yellow-900/30"
+                              ? "bg-emerald-950 text-emerald-400 border border-emerald-900/30"
+                              : m.type === "transfer"
+                                ? "bg-sky-950 text-sky-400 border border-sky-900/30"
+                                : m.type === "spike"
+                                  ? "bg-red-955 text-red-400 border border-red-900/30"
+                                  : "bg-yellow-950 text-yellow-400 border border-yellow-900/30"
                               }`}>
                               {m.type}
                             </span>
@@ -884,8 +884,8 @@ export default function Dashboard() {
                     setFormMessage(null);
                   }}
                   className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 ${activeTab === "status"
-                      ? "bg-teal-500 text-slate-950 shadow-md"
-                      : "text-slate-400 hover:text-white"
+                    ? "bg-teal-500 text-slate-950 shadow-md"
+                    : "text-slate-400 hover:text-white"
                     }`}
                 >
                   <Activity className="h-3.5 w-3.5" />
@@ -897,8 +897,8 @@ export default function Dashboard() {
                     setFormMessage(null);
                   }}
                   className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 ${activeTab === "control"
-                      ? "bg-teal-500 text-slate-950 shadow-md"
-                      : "text-slate-400 hover:text-white"
+                    ? "bg-teal-500 text-slate-950 shadow-md"
+                    : "text-slate-400 hover:text-white"
                     }`}
                 >
                   <Sliders className="h-3.5 w-3.5" />
@@ -953,44 +953,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Top Resources Running Low Warning Panel */}
-                  <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-800 pb-3 mb-4 flex items-center space-x-2">
-                      <AlertTriangle className="h-4 w-4 text-red-500 animate-pulse" />
-                      <span>Network Critical Alerts</span>
-                    </h3>
 
-                    {criticalShortages.length === 0 ? (
-                      <div className="text-center py-6 text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 rounded-xl">
-                        <CheckCircle className="h-7 w-7 mx-auto mb-2" />
-                        <p className="text-xs font-bold">All nodes report full safety margin compliance.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
-                        {criticalShortages.map(({ center, res }, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => handleSelectCenter(center.center_id)}
-                            className="bg-red-955/20 border border-red-900/30 hover:border-red-900/60 rounded-xl p-3 text-xs flex flex-col justify-between cursor-pointer transition-all"
-                          >
-                            <div className="flex items-start justify-between">
-                              <span className="text-[8px] font-black text-red-400 bg-red-950 border border-red-900/50 px-2 py-0.5 rounded uppercase tracking-wider">
-                                Deficit: {res.min_threshold - res.available_qty}
-                              </span>
-                              <span className="text-[9px] text-slate-500 font-mono">{res.item_code}</span>
-                            </div>
-                            <h4 className="font-extrabold text-white text-xs mt-2 truncate">
-                              {res.name}
-                            </h4>
-                            <p className="text-[10px] text-slate-400 mt-1 flex items-center space-x-1">
-                              <MapPin className="h-3 w-3 text-slate-500" />
-                              <span className="truncate">{center.center_name}</span>
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
 
                   {/* Recent Activity Log */}
                   <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
@@ -1015,12 +978,12 @@ export default function Dashboard() {
                               <div className="flex items-center justify-between text-[9px] text-slate-500 mb-1">
                                 <span>{dateStr}</span>
                                 <span className={`px-1.5 py-0.2 rounded font-extrabold uppercase text-[7px] ${m.type === "replenish"
-                                    ? "bg-emerald-950 text-emerald-400 border border-emerald-900/30"
-                                    : m.type === "transfer"
-                                      ? "bg-sky-950 text-sky-400 border border-sky-900/30"
-                                      : m.type === "spike"
-                                        ? "bg-red-955 text-red-400 border border-red-900/30"
-                                        : "bg-yellow-950 text-yellow-400 border border-yellow-900/30"
+                                  ? "bg-emerald-950 text-emerald-400 border border-emerald-900/30"
+                                  : m.type === "transfer"
+                                    ? "bg-sky-950 text-sky-400 border border-sky-900/30"
+                                    : m.type === "spike"
+                                      ? "bg-red-955 text-red-400 border border-red-900/30"
+                                      : "bg-yellow-950 text-yellow-400 border border-yellow-900/30"
                                   }`}>
                                   {m.type}
                                 </span>
@@ -1123,124 +1086,7 @@ export default function Dashboard() {
                     </form>
                   </div>
 
-                  {/* Manual Event Trigger Section */}
-                  <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-800 pb-3 mb-4 flex items-center space-x-2">
-                      <Zap className="h-4 w-4 text-teal-400 animate-pulse" />
-                      <span>Manually Dispatch Network Events</span>
-                    </h3>
 
-                    <form onSubmit={sendManualEvent} className="space-y-4 text-xs">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-slate-400 mb-1.5 font-bold">Action Type</label>
-                          <select
-                            value={manualType}
-                            onChange={(e) => setManualType(e.target.value as "replenish" | "consume" | "transfer")}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
-                          >
-                            <option value="replenish">Truck Replenishment (+)</option>
-                            <option value="consume">Emergency Dispatch (-)</option>
-                            <option value="transfer">Stock Transfer (A ➔ B)</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-slate-400 mb-1.5 font-bold">Qty Change</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={manualQty}
-                            onChange={(e) => setManualQty(Number(e.target.value))}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      {manualType !== "transfer" ? (
-                        <div>
-                          <label className="block text-slate-400 mb-1.5 font-bold">Target Warehouse</label>
-                          <select
-                            value={manualCenterId}
-                            onChange={(e) => setManualCenterId(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
-                          >
-                            {centers.map((c) => (
-                              <option key={c.center_id} value={c.center_id}>
-                                {c.center_name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-slate-400 mb-1.5 font-bold">From (Source)</label>
-                            <select
-                              value={manualSourceId}
-                              onChange={(e) => setManualSourceId(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
-                            >
-                              {centers.map((c) => (
-                                <option key={c.center_id} value={c.center_id}>
-                                  {c.center_name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-slate-400 mb-1.5 font-bold">To (Destination)</label>
-                            <select
-                              value={manualTargetId}
-                              onChange={(e) => setManualTargetId(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
-                            >
-                              {centers.map((c) => (
-                                <option key={c.center_id} value={c.center_id}>
-                                  {c.center_name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="block text-slate-400 mb-1.5 font-bold">Select Supply Item</label>
-                        <select
-                          value={manualItemCode}
-                          onChange={(e) => setManualItemCode(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
-                        >
-                          {triggerResources.map((res) => (
-                            <option key={res.item_code} value={res.item_code}>
-                              {res.name} ({res.item_code})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {formMessage && (
-                        <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${formMessage.type === "success"
-                            ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/40"
-                            : "bg-red-955 text-red-400 border-red-900/40"
-                          }`}>
-                          <span>{formMessage.type === "success" ? "✔" : "❌"}</span>
-                          <span className="flex-1">{formMessage.text}</span>
-                        </div>
-                      )}
-
-                      <button
-                        type="submit"
-                        className="w-full bg-teal-500 hover:bg-teal-400 text-slate-950 py-2.5 rounded-xl font-bold transition flex items-center justify-center space-x-1.5 shadow-lg shadow-teal-500/10"
-                      >
-                        {manualType === "replenish" && <PlusCircle className="h-4 w-4" />}
-                        {manualType === "consume" && <Zap className="h-4 w-4" />}
-                        {manualType === "transfer" && <Truck className="h-4 w-4" />}
-                        <span>Queue Mock Event</span>
-                      </button>
-                    </form>
-                  </div>
 
                 </div>
               )}

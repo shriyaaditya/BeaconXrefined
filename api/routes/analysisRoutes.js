@@ -16,7 +16,7 @@ router.get('/overview', async (req, res) => {
   try {
     // 1️⃣ Fetch basic center info from PostgreSQL (placeholder query).
     const pgResult = await db.query(
-      `SELECT center_id, center_name, district, region, last_sync FROM centers ORDER BY center_id`
+      `SELECT center_code AS center_id, name AS center_name, district, region, updated_at AS last_sync FROM centers ORDER BY center_code`
     );
     const centers = pgResult.rows;
 
@@ -60,7 +60,7 @@ router.get('/warehouse/:id', async (req, res) => {
   const { id } = req.params;
   try {
     // Live inventory from Redis (hashes per resource).
-    const resourceIds = await redis.zrangeByScore(`idrn:center:resources:${id}`, '-inf', '+inf');
+    const resourceIds = await redis.client.smembers(`idrn:center:resources:${id}`);
     const liveResources = await Promise.all(
       resourceIds.map(async (code) => {
         const obj = await redis.hgetAll(`idrn:center:resource:${id}:${code}`);
@@ -81,19 +81,22 @@ router.get('/warehouse/:id', async (req, res) => {
       })
     );
 
-    // Historical trends from PostgreSQL (placeholder 30‑day aggregation).
+    // Historical trends from PostgreSQL (30‑day aggregation).
     const histResult = await db.query(
-      `SELECT item_code, SUM(quantity) AS total_consumed, AVG(burn_rate) AS avg_burn_rate
-       FROM transactions
-       WHERE center_id = $1 AND timestamp >= now() - interval '30 days'
-       GROUP BY item_code`,
+      `SELECT r.resource_code as item_code, SUM(ABS(t.quantity_change)) AS total_consumed
+       FROM inventory_transactions t
+       JOIN resources r ON t.resource_id = r.id
+       JOIN centers c ON t.center_id = c.id
+       WHERE c.center_code = $1 
+         AND t.quantity_change < 0
+         AND t.created_at >= now() - interval '30 days'
+       GROUP BY r.resource_code`,
       [id]
     );
     const histMap = {};
     histResult.rows.forEach((row) => {
       histMap[row.item_code] = {
-        total_consumed: Number(row.total_consumed),
-        avg_burn_rate: Number(row.avg_burn_rate),
+        total_consumed: Number(row.total_consumed)
       };
     });
 
@@ -114,6 +117,48 @@ router.get('/warehouse/:id', async (req, res) => {
 });
 
 /**
+ * GET /analysis/warehouse/:id/activity
+ * Returns the latest 50 inventory transactions for the specified warehouse.
+ */
+router.get('/warehouse/:id/activity', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const activityResult = await db.query(
+      `SELECT t.created_at as timestamp, r.name as resource_name, r.resource_code as item_code, 
+              t.quantity_change, t.action_type as type 
+       FROM inventory_transactions t
+       JOIN resources r ON t.resource_id = r.id
+       JOIN centers c ON t.center_id = c.id
+       WHERE c.center_code = $1 
+       ORDER BY t.created_at DESC LIMIT 50`,
+      [id]
+    );
+    
+    // Format the transactions
+    const activities = activityResult.rows.map(row => {
+      let action = 'Unknown';
+      if (row.type === 'adjustment') {
+        action = row.quantity_change > 0 ? 'Restock' : 'Dispatch';
+      } else {
+        action = row.type.charAt(0).toUpperCase() + row.type.slice(1);
+      }
+      return {
+        timestamp: row.timestamp,
+        resource_name: row.resource_name,
+        item_code: row.item_code,
+        action: action,
+        quantity_change: Number(row.quantity_change)
+      };
+    });
+
+    res.json({ status: 'success', data: activities });
+  } catch (err) {
+    console.error('[Analysis] Warehouse activity error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+/**
  * GET /analysis/resource/:resourceId
  * Returns depletion graph, usage trend, burn rate, predicted stock‑out and transaction history for a resource.
  */
@@ -122,15 +167,34 @@ router.get('/resource/:resourceId', async (req, res) => {
   try {
     // Historical usage from PostgreSQL.
     const usageResult = await db.query(
-      `SELECT timestamp, quantity FROM transactions WHERE item_code = $1 ORDER BY timestamp DESC LIMIT 100`,
+      `SELECT t.created_at as timestamp, t.quantity_change as quantity 
+       FROM inventory_transactions t
+       JOIN resources r ON t.resource_id = r.id
+       WHERE r.resource_code = $1 ORDER BY t.created_at DESC LIMIT 100`,
       [resourceId]
     );
     const usage = usageResult.rows.map((r) => ({ ts: r.timestamp, qty: Number(r.quantity) }));
 
-    // Current live state from Redis (we assume a global key for the resource).
-    const live = await redis.hgetAll(`idrn:resource:${resourceId}`);
-    const available = live ? Number(live.available_qty) : null;
-    const burnRate = live && live.burn_rate ? Number(live.burn_rate) : null;
+    // Global available_qty from PostgreSQL
+    const invResult = await db.query(
+      `SELECT SUM(i.available_qty) as total_qty
+       FROM inventory i
+       JOIN resources r ON i.resource_id = r.id
+       WHERE r.resource_code = $1`,
+      [resourceId]
+    );
+    const available = invResult.rows.length > 0 ? Number(invResult.rows[0].total_qty) : 0;
+    
+    // Estimate global burn rate (drawdowns over last 30 days divided by 30*24 hours)
+    const burnResult = await db.query(
+      `SELECT SUM(ABS(t.quantity_change)) as drawdowns
+       FROM inventory_transactions t
+       JOIN resources r ON t.resource_id = r.id
+       WHERE r.resource_code = $1 AND t.quantity_change < 0 AND t.created_at >= now() - interval '30 days'`,
+      [resourceId]
+    );
+    const drawdowns = burnResult.rows.length > 0 ? Number(burnResult.rows[0].drawdowns) : 0;
+    const burnRate = parseFloat((drawdowns / (30 * 24)).toFixed(2));
     const predictedRunout = burnRate && burnRate > 0 ? Number((available / burnRate).toFixed(1)) : null;
 
     res.json({

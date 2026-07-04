@@ -2,6 +2,7 @@ require('dotenv').config();
 const fs = require('fs').promises;
 const path = require('path');
 const cacheService = require('../services/cacheService');
+const dbService = require('../services/dbService');
 
 // Maharashtra districts & their specific warehouses
 const STORAGE_CENTERS_TEMPLATE = [
@@ -250,6 +251,73 @@ async function seed() {
     }
   } catch (error) {
     console.error('❌ Failed during Redis seeding operation:', error.message);
+  }
+
+  // 3. Write to PostgreSQL Database
+  console.log('Initializing PostgreSQL seeding...');
+  const pgClient = await dbService.pool.connect();
+  try {
+    // Validate schema first
+    const tablesCheck = await pgClient.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name IN ('centers', 'resources', 'inventory', 'inventory_transactions', 'users');
+    `);
+    if (tablesCheck.rows.length < 5) {
+      throw new Error(`Incomplete PostgreSQL schema. Found only ${tablesCheck.rows.length}/5 required tables.`);
+    }
+
+    await pgClient.query('BEGIN');
+
+    console.log('Upserting centers and resources into PostgreSQL...');
+    // Upsert Centers
+    const centerUuids = {};
+    for (const center of generatedData) {
+      const res = await pgClient.query(`
+        INSERT INTO centers (center_code, name, district, region, latitude, longitude)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (center_code) DO UPDATE 
+          SET name = EXCLUDED.name, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude
+        RETURNING id;
+      `, [center.center_id, center.center_name, center.district, center.region, center.latitude, center.longitude]);
+      centerUuids[center.center_id] = res.rows[0].id;
+    }
+
+    // Upsert Resources (only once per resource_code)
+    const resourceUuids = {};
+    for (const template of RESOURCE_TEMPLATES) {
+      const res = await pgClient.query(`
+        INSERT INTO resources (resource_code, name, category, unit)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (resource_code) DO UPDATE 
+          SET name = EXCLUDED.name, category = EXCLUDED.category, unit = EXCLUDED.unit
+        RETURNING id;
+      `, [template.item_code, template.name, template.category, template.unit]);
+      resourceUuids[template.item_code] = res.rows[0].id;
+    }
+
+    console.log('Upserting inventory into PostgreSQL...');
+    // Upsert Inventory
+    for (const center of generatedData) {
+      const cId = centerUuids[center.center_id];
+      for (const res of center.resources) {
+        const rId = resourceUuids[res.item_code];
+        await pgClient.query(`
+          INSERT INTO inventory (center_id, resource_id, available_qty, min_threshold)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (center_id, resource_id) DO UPDATE
+            SET available_qty = EXCLUDED.available_qty, min_threshold = EXCLUDED.min_threshold;
+        `, [cId, rId, res.available_qty, res.min_threshold]);
+      }
+    }
+
+    await pgClient.query('COMMIT');
+    console.log('✔ Successfully seeded PostgreSQL database.');
+  } catch (error) {
+    await pgClient.query('ROLLBACK');
+    console.error('❌ Failed during PostgreSQL seeding operation:', error.message);
+    process.exit(1);
+  } finally {
+    pgClient.release();
   }
 
   console.log('--- SEEDING COMPLETED ---');

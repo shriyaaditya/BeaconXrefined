@@ -266,8 +266,41 @@ async function adjustInventory(centerId, itemCode, quantityChange, type = 'adjus
       last_updated: timestamp
     });
 
-    // Update metadata sync timestamp
-    await client.hSet(`idrn:center:metadata:${centerId}`, 'last_sync', timestamp);
+    // Recalculate metrics for the center
+    const itemCodes = await client.sMembers(`idrn:center:resources:${centerId}`);
+    let criticalCount = 0;
+    let scoreWeight = 0;
+    
+    for (const code of itemCodes) {
+      const res = await client.hGetAll(`idrn:center:resource:${centerId}:${code}`);
+      if (res) {
+        const qty = parseIntSafe(res.available_qty);
+        const thres = parseIntSafe(res.min_threshold);
+        if (qty < thres) {
+          criticalCount++;
+        }
+        scoreWeight += Math.min(qty / (thres || 1), 1.0);
+      }
+    }
+    
+    const healthScore = itemCodes.length > 0 ? Math.round((scoreWeight / itemCodes.length) * 100) : 100;
+    
+    // Calculate basic burn rate (last 100 movements)
+    const rawMovements = await client.lRange('idrn:movements', 0, 99);
+    let burnRateChange = 0;
+    if (rawMovements && rawMovements.length > 0) {
+      const recent = rawMovements.map(m => JSON.parse(m)).filter(m => m.center_id === centerId && m.item_code === itemCode);
+      const drawdowns = recent.reduce((sum, m) => sum + (m.quantity < 0 ? Math.abs(m.quantity) : 0), 0);
+      burnRateChange = parseFloat((drawdowns / 12).toFixed(2)); // basic approximation (per 12 hr)
+    }
+
+    // Update metadata sync timestamp and metrics
+    await client.hSet(`idrn:center:metadata:${centerId}`, {
+      last_sync: timestamp,
+      critical_count: criticalCount,
+      health_score: healthScore,
+      burn_rate_change: burnRateChange
+    });
 
     const metadata = await client.hGetAll(`idrn:center:metadata:${centerId}`);
     const centerName = metadata.name || centerId;
