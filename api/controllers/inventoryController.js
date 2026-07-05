@@ -116,43 +116,6 @@ async function getAllInventory(req, res) {
 }
 
 /**
- * Controller to simulate a sudden disaster consumption event
- */
-async function triggerEmergencySpike(req, res) {
-  const { centerId, itemCode, percentSpike } = req.body;
-
-  if (!centerId || !itemCode) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'centerId and itemCode are required parameters.'
-    });
-  }
-
-  const spikeRate = percentSpike !== undefined ? parseFloat(percentSpike) : 0.50; // default 50% drawdown
-  if (isNaN(spikeRate) || spikeRate <= 0 || spikeRate >= 1) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'percentSpike must be a decimal between 0 and 1 (exclusive).'
-    });
-  }
-
-  try {
-    const updatedResource = await inventoryService.simulateEmergencySpike(centerId, itemCode, spikeRate);
-    return res.status(200).json({
-      status: 'success',
-      message: `Emergency consumption spike simulated successfully for item ${itemCode} in center ${centerId}.`,
-      data: updatedResource
-    });
-  } catch (error) {
-    console.error('triggerEmergencySpike Controller Error:', error.message);
-    return res.status(500).json({
-      status: 'error',
-      message: error.message
-    });
-  }
-}
-
-/**
  * Controller to fetch recent inventory movements
  */
 async function getMovements(req, res) {
@@ -177,7 +140,6 @@ module.exports = {
   transferInventory,
   getShortages,
   getAllInventory,
-  triggerEmergencySpike,
   getMovements
 };
 

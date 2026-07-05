@@ -100,11 +100,42 @@ router.get('/warehouse/:id', async (req, res) => {
       };
     });
 
+    const BASELINES = {
+      'Rescue Equipment': 0.1,
+      'Medical Supplies': 0.8,
+      'Lighting & Power': 0.2,
+      'Water & Sanitation': 1.5,
+      'Shelter & Camps': 0.5,
+      'Food & Survival': 4.0,
+      'Communication': 0.1,
+      'Emergency Vehicles': 0.05
+    };
+
     // Merge live and historical data.
     const merged = liveResources.map((res) => {
-      const hist = histMap[res.item_code] || {};
+      const hist = histMap[res.item_code] || { total_consumed: 0 };
+      
+      // Calculate dynamic daily burn rate and runout hours
+      const dynamicBurn = hist.total_consumed / (30 * 24); // average per hour over 30 days
+      const baseline = BASELINES[res.metadata.category] || 0.1;
+      const hourlyBurnRate = baseline + dynamicBurn;
+      const dailyBurnRate = parseFloat((hourlyBurnRate * 24).toFixed(2));
+      const runoutHours = hourlyBurnRate > 0 ? parseFloat((res.available_qty / hourlyBurnRate).toFixed(1)) : null;
+
+      // Update status dynamically if runout is critical
+      let status = res.metadata.status;
+      if (runoutHours !== null && runoutHours < 24) {
+        status = 'CRITICAL';
+      }
+
       return {
         ...res,
+        metadata: {
+          ...res.metadata,
+          status: status
+        },
+        burn_rate: dailyBurnRate,
+        runout_hours: runoutHours,
         historical: hist,
       };
     });

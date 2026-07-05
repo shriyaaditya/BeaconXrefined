@@ -12,9 +12,6 @@ router.post('/adjust', inventoryController.adjustInventory);
 // Atomic transfer of inventory resources between storage centers
 router.post('/transfer', inventoryController.transferInventory);
 
-// Simulate sudden disaster consumption spikes
-router.post('/spike', inventoryController.triggerEmergencySpike);
-
 // Detect and list all resource shortages across all districts
 router.get('/shortages', inventoryController.getShortages);
 

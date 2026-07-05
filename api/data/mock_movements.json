@@ -1,5 +1,82 @@
 [
   {
+    "id": "mvt-1783139656547-391",
+    "timestamp": "2026-07-04T04:34:10.710Z",
+    "center_id": "wh-mum-sub-003",
+    "center_name": "Borivali Response Base",
+    "item_code": "IDRN-WAT-301",
+    "item_name": "High-Capacity Diesel Water Pump (5 HP)",
+    "type": "restock",
+    "quantity": 31,
+    "details": "Adjusted 31 units of High-Capacity Diesel Water Pump (5 HP) at Borivali Response Base."
+  },
+  {
+    "id": "mvt-1783139641994-685",
+    "timestamp": "2026-07-04T04:33:54.108Z",
+    "center_id": "wh-raigad-001",
+    "center_name": "Alibag Coast Guard Relief Station",
+    "item_code": "IDRN-WAT-301",
+    "item_name": "High-Capacity Diesel Water Pump (5 HP)",
+    "type": "dispatch",
+    "quantity": -6,
+    "details": "Adjusted 6 units of High-Capacity Diesel Water Pump (5 HP) at Alibag Coast Guard Relief Station."
+  },
+  {
+    "id": "mvt-1783139632478-97",
+    "timestamp": "2026-07-04T04:33:44.893Z",
+    "center_id": "wh-thane-003",
+    "center_name": "Mira-Bhayandar Emergency Store",
+    "item_code": "IDRN-SHT-402",
+    "item_name": "Tarpaulin Sheet (High-density, 15x15 ft)",
+    "type": "restock",
+    "quantity": 12,
+    "details": "Adjusted 12 units of Tarpaulin Sheet (High-density, 15x15 ft) at Mira-Bhayandar Emergency Store."
+  },
+  {
+    "id": "mvt-1783139620875-698",
+    "timestamp": "2026-07-04T04:33:34.141Z",
+    "center_id": "wh-mum-sub-003",
+    "center_name": "Borivali Response Base",
+    "item_code": "IDRN-RE-003",
+    "item_name": "Life Jacket (Adult, high-buoyancy)",
+    "type": "dispatch",
+    "quantity": -2,
+    "details": "Adjusted 2 units of Life Jacket (Adult, high-buoyancy) at Borivali Response Base."
+  },
+  {
+    "id": "mvt-1783139611202-3",
+    "timestamp": "2026-07-04T04:33:25.715Z",
+    "center_id": "wh-thane-001",
+    "center_name": "Thane District Response Warehouse",
+    "item_code": "IDRN-RE-003",
+    "item_name": "Life Jacket (Adult, high-buoyancy)",
+    "type": "transfer_in",
+    "quantity": 3,
+    "details": "Adjusted 3 units of Life Jacket (Adult, high-buoyancy) at Thane District Response Warehouse."
+  },
+  {
+    "id": "mvt-1783139610961-4",
+    "timestamp": "2026-07-04T04:33:23.658Z",
+    "center_id": "wh-raigad-003",
+    "center_name": "Mahad Flood Response Center",
+    "item_code": "IDRN-RE-003",
+    "item_name": "Life Jacket (Adult, high-buoyancy)",
+    "type": "transfer_out",
+    "quantity": -3,
+    "details": "Adjusted 3 units of Life Jacket (Adult, high-buoyancy) at Mahad Flood Response Center."
+  },
+  {
+    "id": "mvt-1783139600950-660",
+    "timestamp": "2026-07-04T04:33:14.238Z",
+    "center_id": "wh-mum-sub-003",
+    "center_name": "Borivali Response Base",
+    "item_code": "IDRN-COM-701",
+    "item_name": "VHF Walkie-Talkie Set (Waterproof)",
+    "type": "dispatch",
+    "quantity": -9,
+    "details": "Adjusted 9 units of VHF Walkie-Talkie Set (Waterproof) at Borivali Response Base."
+  },
+  {
     "id": "mvt-1783138665627-429",
     "timestamp": "2026-07-04T04:17:45.623Z",
     "center_id": "wh-raigad-001",

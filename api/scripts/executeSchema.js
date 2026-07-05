@@ -12,18 +12,19 @@ async function executeSchema() {
   }
 
   const client = new Client({ connectionString });
-  
+
   try {
     console.log('Connecting to Supabase...');
     await client.connect();
-    
-    const schemaPath = '/Users/shriyadalai/.gemini/antigravity-ide/brain/b2da6533-2b99-4a6f-a53c-5f92eb2efb79/schema.sql';
+
+    // --- NEW: relative path inside the api folder ---
+    const schemaPath = path.join(__dirname, '../schema.sql');
     console.log(`Reading schema from ${schemaPath}...`);
     const sql = fs.readFileSync(schemaPath, 'utf8');
-    
+
     console.log('Executing schema...');
     await client.query(sql);
-    
+
     console.log('✔ Schema executed successfully.');
   } catch (err) {
     console.error('❌ Error executing schema:', err.message);

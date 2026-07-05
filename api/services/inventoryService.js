@@ -11,17 +11,14 @@ function isRedisActive() {
   return cacheService.getIsRedisConnected();
 }
 
+
 /**
- * Helper to parse integers safely
+ * The parseIntSafe() and parseFloatSafe() functions exist because data coming from Redis is always returned as strings, even if you originally stored numbers.
  */
 function parseIntSafe(val, defaultVal = 0) {
   const parsed = parseInt(val, 10);
   return isNaN(parsed) ? defaultVal : parsed;
 }
-
-/**
- * Helper to parse float safely
- */
 function parseFloatSafe(val, defaultVal = 0) {
   const parsed = parseFloat(val);
   return isNaN(parsed) ? defaultVal : parsed;
@@ -64,12 +61,12 @@ async function getAllCenters() {
     try {
       const client = cacheService.getClient();
       const centerIds = await client.sMembers('idrn:centers');
-      
+
       if (!centerIds || centerIds.length === 0) {
         console.log('No centers found in Redis. Falling back to local JSON data.');
         centers = await readLocalData();
       } else {
-        // Parallel fetch of all centers
+        // Parallel fetch of all centers so we use await and promises
         const centersPromises = centerIds.map(centerId => getCenter(centerId));
         const resolved = await Promise.all(centersPromises);
         centers = resolved.filter(c => c !== null);
@@ -113,9 +110,9 @@ function attachMetrics(centers, movements) {
     let scoreWeight = 0;
     const resources = center.resources.map(res => {
       // Find drawdowns in movements for this center and resource
-      const relevantMovements = movements.filter(m => 
-        m.center_id === center.center_id && 
-        m.item_code === res.item_code && 
+      const relevantMovements = movements.filter(m =>
+        m.center_id === center.center_id &&
+        m.item_code === res.item_code &&
         (m.type === 'consume' || m.type === 'spike' || m.type === 'transfer')
       );
 
@@ -176,13 +173,13 @@ async function getCenter(centerId) {
 
   try {
     const client = cacheService.getClient();
-    
+
     // Parallel fetch of metadata and item list
     const [metadata, itemCodes] = await Promise.all([
       client.hGetAll(`idrn:center:metadata:${centerId}`),
       client.sMembers(`idrn:center:resources:${centerId}`)
     ]);
-    
+
     // If no metadata exists, this center does not exist
     if (!metadata || Object.keys(metadata).length === 0) {
       return null;
@@ -253,7 +250,7 @@ async function adjustInventory(centerId, itemCode, quantityChange, type = 'adjus
 
     const currentQty = parseIntSafe(resData.available_qty);
     const minThreshold = parseIntSafe(resData.min_threshold);
-    
+
     let newQty = currentQty + changeVal;
     if (newQty < 0) newQty = 0;
 
@@ -270,7 +267,7 @@ async function adjustInventory(centerId, itemCode, quantityChange, type = 'adjus
     const itemCodes = await client.sMembers(`idrn:center:resources:${centerId}`);
     let criticalCount = 0;
     let scoreWeight = 0;
-    
+    //critical count calculation
     for (const code of itemCodes) {
       const res = await client.hGetAll(`idrn:center:resource:${centerId}:${code}`);
       if (res) {
@@ -279,12 +276,12 @@ async function adjustInventory(centerId, itemCode, quantityChange, type = 'adjus
         if (qty < thres) {
           criticalCount++;
         }
-        scoreWeight += Math.min(qty / (thres || 1), 1.0);
+        scoreWeight += Math.min(qty / (thres || 1), 1.0);//aps the ratio at 1.0. This means any resource that is at or above its threshold contributes a full 1.0 to the score; anything below the threshold contributes a fractional value proportional to how low it is.
       }
     }
-    
+
     const healthScore = itemCodes.length > 0 ? Math.round((scoreWeight / itemCodes.length) * 100) : 100;
-    
+
     // Calculate basic burn rate (last 100 movements)
     const rawMovements = await client.lRange('idrn:movements', 0, 99);
     let burnRateChange = 0;
@@ -567,41 +564,7 @@ async function checkShortages() {
   return shortages;
 }
 
-/**
- * Simulates a disaster-related emergency consumption spike by drawing down
- * a specified percentage (e.g. 0.50 = 50%) of a specific item in a center.
- */
-async function simulateEmergencySpike(centerId, itemCode, percentSpike = 0.5) {
-  if (percentSpike <= 0 || percentSpike >= 1) {
-    throw new Error('Percent spike must be a decimal between 0 and 1 (exclusive).');
-  }
 
-  let currentQty = 0;
-
-  if (isRedisActive()) {
-    const client = cacheService.getClient();
-    const resourceKey = `idrn:center:resource:${centerId}:${itemCode}`;
-    const resData = await client.hGetAll(resourceKey);
-    if (!resData || Object.keys(resData).length === 0) {
-      throw new Error(`Resource "${itemCode}" not found.`);
-    }
-    currentQty = parseIntSafe(resData.available_qty);
-  } else {
-    const localData = await readLocalData();
-    const center = localData.find(c => c.center_id === centerId);
-    const res = center ? center.resources.find(r => r.item_code === itemCode) : null;
-    if (!res) throw new Error(`Resource "${itemCode}" not found.`);
-    currentQty = res.available_qty;
-  }
-
-  // Drawdown amount
-  const drawdown = Math.round(currentQty * percentSpike);
-  // Ensure we reduce at least 1 unit if currentQty > 0
-  const actualReduction = drawdown > 0 ? -drawdown : (currentQty > 0 ? -1 : 0);
-
-  console.log(`[SPIKE SIM] Reducing center "${centerId}" item "${itemCode}" quantity by ${Math.round(percentSpike * 100)}% (change: ${actualReduction})`);
-  return await adjustInventory(centerId, itemCode, actualReduction, 'spike');
-}
 
 /**
  * Logs an inventory movement (replenishment, consumption, transfer, spike).
@@ -669,7 +632,6 @@ module.exports = {
   adjustInventory,
   transferInventory,
   checkShortages,
-  simulateEmergencySpike,
   logMovement,
   getRecentMovements
 };
