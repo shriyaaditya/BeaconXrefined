@@ -35,8 +35,8 @@ async function initQueue(io) {
           amqpChannel.ack(msg);
         } catch (err) {
           console.error('[QUEUE] Failed processing message:', err.message);
-          // Requeue or discard? Discard for simplicity, or nack with requeue=false
-          amqpChannel.nack(msg, false, false);
+          // Rollback handled internally by inventoryService. Requeue message to allow retry.
+          amqpChannel.nack(msg, false, true);
         }
       }
     });
@@ -69,100 +69,19 @@ async function processInventoryUpdate(payload) {
 
   console.log(`[QUEUE] Processing: Center=${centerCode}, Resource=${resourceCode}, Change=${changeVal}, Action=${pgAction}`);
   
-  // 2. Resolve UUIDs from PostgreSQL
-  let centerUuid = null;
-  let resourceUuid = null;
+  // 2. Adjust Inventory (Handles Postgres transaction, Redis cache, and mock_movements internally)
+  const updatedResState = await inventoryService.adjustInventory(centerCode, resourceCode, changeVal, pgAction);
+  console.log(`[QUEUE] Inventory adjusted successfully via inventoryService.`);
   
-  const centerRes = await dbService.query('SELECT id FROM centers WHERE center_code = $1', [centerCode]);
-  if (centerRes.rows.length === 0) {
-    throw new Error(`Center code "${centerCode}" not found in PostgreSQL database.`);
-  }
-  centerUuid = centerRes.rows[0].id;
-  
-  const resourceRes = await dbService.query('SELECT id FROM resources WHERE resource_code = $1', [resourceCode]);
-  if (resourceRes.rows.length === 0) {
-    throw new Error(`Resource code "${resourceCode}" not found in PostgreSQL database.`);
-  }
-  resourceUuid = resourceRes.rows[0].id;
-  
-  // 3. PostgreSQL Transaction
-  const pgClient = await dbService.pool.connect();
-  let dbQty = 0;
-  let dbMinThreshold = 0;
-  
-  try {
-    await pgClient.query('BEGIN');
-    
-    // Retrieve or insert inventory row
-    const invSelect = await pgClient.query(
-      'SELECT available_qty, min_threshold FROM inventory WHERE center_id = $1 AND resource_id = $2',
-      [centerUuid, resourceUuid]
-    );
-    
-    if (invSelect.rows.length > 0) {
-      dbMinThreshold = invSelect.rows[0].min_threshold;
-      const currentQty = invSelect.rows[0].available_qty;
-      dbQty = Math.max(0, currentQty + changeVal);
-      
-      await pgClient.query(
-        'UPDATE inventory SET available_qty = $1, updated_at = CURRENT_TIMESTAMP WHERE center_id = $2 AND resource_id = $3',
-        [dbQty, centerUuid, resourceUuid]
-      );
-    } else {
-      dbQty = Math.max(0, changeVal);
-      dbMinThreshold = 0; // default for new rows
-      
-      await pgClient.query(
-        'INSERT INTO inventory (center_id, resource_id, available_qty, min_threshold) VALUES ($1, $2, $3, $4)',
-        [centerUuid, resourceUuid, dbQty, dbMinThreshold]
-      );
-    }
-    
-    // Insert Transaction history row
-    await pgClient.query(
-      `INSERT INTO inventory_transactions (center_id, resource_id, quantity_change, action_type, reason, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        centerUuid,
-        resourceUuid,
-        changeVal,
-        pgAction,
-        notes || `Queue update via ${actionType}`,
-        null // System/simulator generated event
-      ]
-    );
-    
-    await pgClient.query('COMMIT');
-    console.log(`[QUEUE PG] PostgreSQL inventory updated successfully. New quantity: ${dbQty}`);
-  } catch (err) {
-    await pgClient.query('ROLLBACK');
-    console.error('[QUEUE PG ERROR] PostgreSQL transaction rolled back:', err.message);
-    throw err;
-  } finally {
-    pgClient.release();
-  }
-  
-  // 4. Update Redis & Local File cache (via inventoryService)
-  let updatedResState = null;
-  try {
-    updatedResState = await inventoryService.adjustInventory(centerCode, resourceCode, changeVal, pgAction);
-    console.log(`[QUEUE REDIS] Redis state adjusted successfully.`);
-  } catch (err) {
-    console.error('[QUEUE REDIS ERROR] Failed to adjust Redis/Local File Cache:', err.message);
-    // We continue since PostgreSQL was updated and matches source of truth
-  }
-  
-  // 5. Emit Event via Socket.IO
-  if (ioInstance) {
-    const isLowStock = updatedResState 
-      ? updatedResState.available_qty < updatedResState.min_threshold 
-      : dbQty < dbMinThreshold;
+  // 3. Emit Event via Socket.IO
+  if (ioInstance && updatedResState && updatedResState.redisSuccess) {
+    const isLowStock = updatedResState.available_qty < updatedResState.min_threshold;
       
     ioInstance.emit('inventory-updated', {
       centerCode,
       resourceCode,
-      availableQty: updatedResState ? updatedResState.available_qty : dbQty,
-      minThreshold: updatedResState ? updatedResState.min_threshold : dbMinThreshold,
+      availableQty: updatedResState.available_qty,
+      minThreshold: updatedResState.min_threshold,
       quantityChange: changeVal,
       actionType,
       isLowStock,

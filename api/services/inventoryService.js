@@ -1,20 +1,12 @@
 const fs = require('fs').promises;
 const path = require('path');
 const cacheService = require('./cacheService');
+const dbService = require('./dbService');
 
-const mockDataPath = path.join(__dirname, '../data/mock_idrn_data.json');
-
-/**
- * Helper to check if Redis is active
- */
 function isRedisActive() {
   return cacheService.getIsRedisConnected();
 }
 
-
-/**
- * The parseIntSafe() and parseFloatSafe() functions exist because data coming from Redis is always returned as strings, even if you originally stored numbers.
- */
 function parseIntSafe(val, defaultVal = 0) {
   const parsed = parseInt(val, 10);
   return isNaN(parsed) ? defaultVal : parsed;
@@ -24,62 +16,74 @@ function parseFloatSafe(val, defaultVal = 0) {
   return isNaN(parsed) ? defaultVal : parsed;
 }
 
-/**
- * Reads local JSON database file (used in fallback/offline mode)
- */
-async function readLocalData() {
-  try {
-    const rawData = await fs.readFile(mockDataPath, 'utf8');
-    return JSON.parse(rawData);
-  } catch (err) {
-    console.error('Failed to read local JSON data:', err.message);
-    return [];
+async function fetchCentersFromDB() {
+  const query = `
+    SELECT
+      c.id as c_uuid, c.center_code, c.name as center_name, c.latitude, c.longitude, c.district, c.region, c.updated_at as center_updated_at,
+      r.id as r_uuid, r.resource_code, r.name as resource_name, r.category, r.unit,
+      i.available_qty, i.min_threshold, i.updated_at as inv_updated_at
+    FROM centers c
+    LEFT JOIN inventory i ON c.id = i.center_id
+    LEFT JOIN resources r ON i.resource_id = r.id
+  `;
+  const result = await dbService.query(query);
+  const centerMap = {};
+  for (const row of result.rows) {
+    if (!centerMap[row.center_code]) {
+      centerMap[row.center_code] = {
+        center_id: row.center_code,
+        center_name: row.center_name,
+        latitude: parseFloat(row.latitude) || 0,
+        longitude: parseFloat(row.longitude) || 0,
+        district: row.district,
+        region: row.region,
+        resources: [],
+        last_sync: row.center_updated_at
+      };
+    }
+    if (row.resource_code) {
+      centerMap[row.center_code].resources.push({
+        item_code: row.resource_code,
+        name: row.resource_name,
+        available_qty: row.available_qty,
+        min_threshold: row.min_threshold,
+        last_updated: row.inv_updated_at,
+        metadata: {
+          category: row.category,
+          unit: row.unit,
+          status: row.available_qty < row.min_threshold ? 'Critical' : 'Adequate'
+        }
+      });
+    }
   }
+  return Object.values(centerMap).sort((a, b) => a.center_id.localeCompare(b.center_id));
 }
 
-/**
- * Writes local JSON database file (used in fallback/offline mode)
- */
-async function writeLocalData(data) {
-  try {
-    await fs.writeFile(mockDataPath, JSON.stringify(data, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Failed to write local JSON data:', err.message);
-  }
-}
-
-/**
- * Fetches all centers and reconstructs their resource inventory
- * dynamically from granular Redis hashes (or local JSON fallback).
- */
 async function getAllCenters() {
   let centers = [];
-  if (!isRedisActive()) {
-    console.log('Redis offline: Fetching inventory from local JSON database.');
-    centers = await readLocalData();
-  } else {
+  if (isRedisActive()) {
     try {
       const client = cacheService.getClient();
       const centerIds = await client.sMembers('idrn:centers');
 
       if (!centerIds || centerIds.length === 0) {
-        console.log('No centers found in Redis. Falling back to local JSON data.');
-        centers = await readLocalData();
+        console.log('No centers found in Redis. Fetching from Postgres.');
+        centers = await fetchCentersFromDB();
       } else {
-        // Parallel fetch of all centers so we use await and promises
         const centersPromises = centerIds.map(centerId => getCenter(centerId));
         const resolved = await Promise.all(centersPromises);
         centers = resolved.filter(c => c !== null);
-        // Sort centers by ID to keep output consistent
         centers.sort((a, b) => a.center_id.localeCompare(b.center_id));
       }
     } catch (err) {
       console.error('Failed to reconstruct inventory from Redis hashes:', err.message);
-      centers = await readLocalData();
+      centers = await fetchCentersFromDB();
     }
+  } else {
+    console.log('Redis offline: Fetching inventory from Postgres database.');
+    centers = await fetchCentersFromDB();
   }
 
-  // Calculate and attach dynamic readiness, burn rates, and runout predictions
   try {
     const movements = await getRecentMovements();
     centers = attachMetrics(centers, movements);
@@ -90,11 +94,7 @@ async function getAllCenters() {
   return centers;
 }
 
-/**
- * Calculates burn rates, runout predictions, and readiness scores.
- */
 function attachMetrics(centers, movements) {
-  // Baseline burn rates by category (units/hour) to keep dashboard active
   const BASELINES = {
     'Rescue Equipment': 0.1,
     'Medical Supplies': 0.8,
@@ -109,36 +109,31 @@ function attachMetrics(centers, movements) {
   return centers.map(center => {
     let scoreWeight = 0;
     const resources = center.resources.map(res => {
-      // Find drawdowns in movements for this center and resource
       const relevantMovements = movements.filter(m =>
         m.center_id === center.center_id &&
         m.item_code === res.item_code &&
         (m.type === 'consume' || m.type === 'spike' || m.type === 'transfer')
       );
 
-      // Sum drawdowns (quantities are negative for adjust/consume, positive for transfer out)
       let totalDrawdown = 0;
       relevantMovements.forEach(m => {
         if (m.type === 'transfer') {
-          totalDrawdown += m.quantity; // transfers out are positive quantities
+          totalDrawdown += m.quantity; 
         } else {
-          totalDrawdown += Math.abs(m.quantity); // drawdowns are negative
+          totalDrawdown += Math.abs(m.quantity); 
         }
       });
 
-      // Compute dynamic burn rate (scaled over 12 hours)
-      const dynamicBurn = totalDrawdown / 12; // units per hour
+      const dynamicBurn = totalDrawdown / 12;
       const category = res.metadata.category || 'Default';
       const baseline = BASELINES[category] || 0.1;
       const burnRate = parseFloat((baseline + dynamicBurn).toFixed(2));
 
-      // Calculate runout predictions
       let runoutHours = null;
       if (burnRate > 0) {
         runoutHours = parseFloat((res.available_qty / burnRate).toFixed(1));
       }
 
-      // Calculate ratio for readiness score weight
       const threshold = res.min_threshold || 1;
       const ratio = res.available_qty / threshold;
       scoreWeight += Math.min(ratio, 1.0);
@@ -162,30 +157,24 @@ function attachMetrics(centers, movements) {
   });
 }
 
-/**
- * Reconstructs a single center's details and inventory from Redis hashes.
- */
 async function getCenter(centerId) {
   if (!isRedisActive()) {
-    const localData = await readLocalData();
-    return localData.find(c => c.center_id === centerId) || null;
+    const centers = await fetchCentersFromDB();
+    return centers.find(c => c.center_id === centerId) || null;
   }
 
   try {
     const client = cacheService.getClient();
-
-    // Parallel fetch of metadata and item list
     const [metadata, itemCodes] = await Promise.all([
       client.hGetAll(`idrn:center:metadata:${centerId}`),
       client.sMembers(`idrn:center:resources:${centerId}`)
     ]);
 
-    // If no metadata exists, this center does not exist
     if (!metadata || Object.keys(metadata).length === 0) {
-      return null;
+      const centers = await fetchCentersFromDB();
+      return centers.find(c => c.center_id === centerId) || null;
     }
 
-    // Parallel fetch of all resource hashes
     const resourcePromises = itemCodes.map(async (itemCode) => {
       const resData = await client.hGetAll(`idrn:center:resource:${centerId}:${itemCode}`);
       if (!resData || Object.keys(resData).length === 0) return null;
@@ -209,8 +198,6 @@ async function getCenter(centerId) {
 
     const resolvedResources = await Promise.all(resourcePromises);
     const resources = resolvedResources.filter(r => r !== null);
-
-    // Sort resources by item_code for consistency
     resources.sort((a, b) => a.item_code.localeCompare(b.item_code));
 
     return {
@@ -225,318 +212,279 @@ async function getCenter(centerId) {
     };
   } catch (err) {
     console.error(`Error reconstructing center ${centerId} from Redis:`, err.message);
-    return null;
+    const centers = await fetchCentersFromDB();
+    return centers.find(c => c.center_id === centerId) || null;
   }
 }
 
-/**
- * Adjusts inventory quantities for a specific item in a center.
- * Handles both increases (+qty) and reductions (-qty).
- * Returns the updated resource state.
- */
 async function adjustInventory(centerId, itemCode, quantityChange, type = 'adjust') {
   const changeVal = parseIntSafe(quantityChange);
   const timestamp = new Date().toISOString();
 
-  if (isRedisActive()) {
-    const client = cacheService.getClient();
-    const resourceKey = `idrn:center:resource:${centerId}:${itemCode}`;
+  const client = await dbService.getClient();
+  let updatedResData = null;
+  let centerName = centerId;
+  let resourceName = itemCode;
 
-    // Verify resource exists
-    const resData = await client.hGetAll(resourceKey);
-    if (!resData || Object.keys(resData).length === 0) {
-      throw new Error(`Resource "${itemCode}" does not exist in center "${centerId}".`);
+  try {
+    await client.query('BEGIN');
+
+    const centerResult = await client.query('SELECT id, name FROM centers WHERE center_code = $1', [centerId]);
+    if (centerResult.rowCount === 0) throw new Error(`Center "${centerId}" does not exist.`);
+    const c_uuid = centerResult.rows[0].id;
+    centerName = centerResult.rows[0].name;
+
+    const resourceResult = await client.query('SELECT id, name, category, unit FROM resources WHERE resource_code = $1', [itemCode]);
+    if (resourceResult.rowCount === 0) throw new Error(`Resource "${itemCode}" does not exist.`);
+    const r_uuid = resourceResult.rows[0].id;
+    resourceName = resourceResult.rows[0].name;
+
+    const invResult = await client.query('SELECT available_qty, min_threshold FROM inventory WHERE center_id = $1 AND resource_id = $2 FOR UPDATE', [c_uuid, r_uuid]);
+    if (invResult.rowCount === 0) {
+      await client.query('INSERT INTO inventory (center_id, resource_id, available_qty, min_threshold) VALUES ($1, $2, $3, $4)', [c_uuid, r_uuid, Math.max(0, changeVal), 0]);
     }
 
-    const currentQty = parseIntSafe(resData.available_qty);
-    const minThreshold = parseIntSafe(resData.min_threshold);
-
+    const currentQty = invResult.rowCount > 0 ? invResult.rows[0].available_qty : 0;
+    const minThreshold = invResult.rowCount > 0 ? invResult.rows[0].min_threshold : 0;
     let newQty = currentQty + changeVal;
     if (newQty < 0) newQty = 0;
 
+    await client.query('UPDATE inventory SET available_qty = $1, updated_at = NOW() WHERE center_id = $2 AND resource_id = $3', [newQty, c_uuid, r_uuid]);
+
+    let actionType = 'correction';
+    if (type === 'replenish') actionType = 'restock';
+    else if (type === 'consume' || type === 'spike') actionType = 'dispatch';
+
+    const reasonStr = `${type === 'replenish' ? 'Replenished' : type === 'spike' ? 'Emergency drawdown (disaster spike)' : 'Adjusted'} ${Math.abs(changeVal)} units of ${resourceName} at ${centerName}.`;
+
+    await client.query(`
+      INSERT INTO inventory_transactions (center_id, resource_id, quantity_change, action_type, reason)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [c_uuid, r_uuid, changeVal, actionType, reasonStr]);
+
+    await client.query('COMMIT');
+
     const newStatus = newQty < minThreshold ? 'Critical' : 'Adequate';
-
-    // Atomic update of only target attributes
-    await client.hSet(resourceKey, {
-      available_qty: String(newQty),
-      status: newStatus,
-      last_updated: timestamp
-    });
-
-    // Recalculate metrics for the center
-    const itemCodes = await client.sMembers(`idrn:center:resources:${centerId}`);
-    let criticalCount = 0;
-    let scoreWeight = 0;
-    //critical count calculation
-    for (const code of itemCodes) {
-      const res = await client.hGetAll(`idrn:center:resource:${centerId}:${code}`);
-      if (res) {
-        const qty = parseIntSafe(res.available_qty);
-        const thres = parseIntSafe(res.min_threshold);
-        if (qty < thres) {
-          criticalCount++;
-        }
-        scoreWeight += Math.min(qty / (thres || 1), 1.0);//aps the ratio at 1.0. This means any resource that is at or above its threshold contributes a full 1.0 to the score; anything below the threshold contributes a fractional value proportional to how low it is.
-      }
-    }
-
-    const healthScore = itemCodes.length > 0 ? Math.round((scoreWeight / itemCodes.length) * 100) : 100;
-
-    // Calculate basic burn rate (last 100 movements)
-    const rawMovements = await client.lRange('idrn:movements', 0, 99);
-    let burnRateChange = 0;
-    if (rawMovements && rawMovements.length > 0) {
-      const recent = rawMovements.map(m => JSON.parse(m)).filter(m => m.center_id === centerId && m.item_code === itemCode);
-      const drawdowns = recent.reduce((sum, m) => sum + (m.quantity < 0 ? Math.abs(m.quantity) : 0), 0);
-      burnRateChange = parseFloat((drawdowns / 12).toFixed(2)); // basic approximation (per 12 hr)
-    }
-
-    // Update metadata sync timestamp and metrics
-    await client.hSet(`idrn:center:metadata:${centerId}`, {
-      last_sync: timestamp,
-      critical_count: criticalCount,
-      health_score: healthScore,
-      burn_rate_change: burnRateChange
-    });
-
-    const metadata = await client.hGetAll(`idrn:center:metadata:${centerId}`);
-    const centerName = metadata.name || centerId;
-
-    await logMovement({
-      id: 'mvt-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-      timestamp,
-      center_id: centerId,
-      center_name: centerName,
+    updatedResData = {
       item_code: itemCode,
-      item_name: resData.name || itemCode,
-      type,
-      quantity: changeVal,
-      details: `${type === 'replenish' ? 'Replenished' : type === 'spike' ? 'Emergency drawdown (disaster spike)' : 'Adjusted'} ${Math.abs(changeVal)} units of ${resData.name || itemCode} at ${centerName}.`
-    });
-
-    return {
-      item_code: itemCode,
-      name: resData.name,
+      name: resourceName,
       available_qty: newQty,
       min_threshold: minThreshold,
       last_updated: timestamp,
       metadata: {
-        category: resData.category,
-        unit: resData.unit,
+        category: resourceResult.rows[0].category,
+        unit: resourceResult.rows[0].unit,
         status: newStatus
       }
     };
-  } else {
-    // Offline local JSON file mode
-    console.log('Redis offline: Adjusting inventory in local file database.');
-    const localData = await readLocalData();
-    const center = localData.find(c => c.center_id === centerId);
-    if (!center) {
-      throw new Error(`Center "${centerId}" does not exist in local database.`);
-    }
-
-    const resource = center.resources.find(r => r.item_code === itemCode);
-    if (!resource) {
-      throw new Error(`Resource "${itemCode}" does not exist in center "${centerId}".`);
-    }
-
-    let newQty = resource.available_qty + changeVal;
-    if (newQty < 0) newQty = 0;
-
-    resource.available_qty = newQty;
-    resource.metadata.status = newQty < resource.min_threshold ? 'Critical' : 'Adequate';
-    resource.last_updated = timestamp;
-    center.last_sync = timestamp;
-
-    await writeLocalData(localData);
-
-    await logMovement({
-      id: 'mvt-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-      timestamp,
-      center_id: centerId,
-      center_name: center.center_name,
-      item_code: itemCode,
-      item_name: resource.name,
-      type,
-      quantity: changeVal,
-      details: `${type === 'replenish' ? 'Replenished' : type === 'spike' ? 'Emergency drawdown (disaster spike)' : 'Adjusted'} ${Math.abs(changeVal)} units of ${resource.name} at ${center.center_name}.`
-    });
-
-    return resource;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+
+  let redisSuccess = false;
+  if (isRedisActive()) {
+    try {
+      const rClient = cacheService.getClient();
+      const resourceKey = `idrn:center:resource:${centerId}:${itemCode}`;
+      
+      const resData = await rClient.hGetAll(resourceKey);
+      if (resData && Object.keys(resData).length > 0) {
+        await rClient.hSet(resourceKey, {
+          available_qty: String(updatedResData.available_qty),
+          status: updatedResData.metadata.status,
+          last_updated: timestamp
+        });
+      } else {
+        await rClient.hSet(resourceKey, {
+          name: updatedResData.name,
+          category: updatedResData.metadata.category,
+          unit: updatedResData.metadata.unit,
+          available_qty: String(updatedResData.available_qty),
+          min_threshold: String(updatedResData.min_threshold),
+          status: updatedResData.metadata.status,
+          last_updated: timestamp
+        });
+        await rClient.sAdd(`idrn:center:resources:${centerId}`, itemCode);
+      }
+
+      const itemCodes = await rClient.sMembers(`idrn:center:resources:${centerId}`);
+      let criticalCount = 0;
+      let scoreWeight = 0;
+      for (const code of itemCodes) {
+        const res = await rClient.hGetAll(`idrn:center:resource:${centerId}:${code}`);
+        if (res && res.available_qty) {
+          const qty = parseIntSafe(res.available_qty);
+          const thres = parseIntSafe(res.min_threshold);
+          if (qty < thres) criticalCount++;
+          scoreWeight += Math.min(qty / (thres || 1), 1.0);
+        }
+      }
+      const healthScore = itemCodes.length > 0 ? Math.round((scoreWeight / itemCodes.length) * 100) : 100;
+      await rClient.hSet(`idrn:center:metadata:${centerId}`, {
+        last_sync: timestamp,
+        critical_count: criticalCount,
+        health_score: healthScore
+      });
+      redisSuccess = true;
+    } catch (redisErr) {
+      console.error('Failed to update Redis after Postgres transaction:', redisErr.message);
+    }
+  }
+
+  await logMovement({
+    id: 'mvt-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+    timestamp,
+    center_id: centerId,
+    center_name: centerName,
+    item_code: itemCode,
+    item_name: resourceName,
+    type,
+    quantity: changeVal,
+    details: `${type === 'replenish' ? 'Replenished' : type === 'spike' ? 'Emergency drawdown (disaster spike)' : 'Adjusted'} ${Math.abs(changeVal)} units of ${resourceName} at ${centerName}.`
+  });
+
+  updatedResData.redisSuccess = redisSuccess;
+  return updatedResData;
 }
 
-/**
- * Atomically transfers a quantity of an item from a source center to a target center.
- * Checks for inventory availability before execution.
- */
 async function transferInventory(sourceCenterId, targetCenterId, itemCode, quantity) {
   const qtyToTransfer = parseIntSafe(quantity);
   if (qtyToTransfer <= 0) {
     throw new Error('Transfer quantity must be greater than zero.');
   }
-
   const timestamp = new Date().toISOString();
 
-  if (isRedisActive()) {
-    const client = cacheService.getClient();
+  const client = await dbService.getClient();
+  let srcName = sourceCenterId;
+  let destName = targetCenterId;
+  let resourceName = itemCode;
+  
+  let newSrcQty = 0;
+  let newDestQty = 0;
+  let srcStatus = '';
+  let destStatus = '';
 
-    const srcResKey = `idrn:center:resource:${sourceCenterId}:${itemCode}`;
-    const destResKey = `idrn:center:resource:${targetCenterId}:${itemCode}`;
+  try {
+    await client.query('BEGIN');
 
-    // Read details
-    const srcData = await client.hGetAll(srcResKey);
-    const destData = await client.hGetAll(destResKey);
+    const srcCenterResult = await client.query('SELECT id, name FROM centers WHERE center_code = $1', [sourceCenterId]);
+    const destCenterResult = await client.query('SELECT id, name FROM centers WHERE center_code = $1', [targetCenterId]);
+    if (srcCenterResult.rowCount === 0) throw new Error(`Source Center "${sourceCenterId}" does not exist.`);
+    if (destCenterResult.rowCount === 0) throw new Error(`Target Center "${targetCenterId}" does not exist.`);
+    
+    const src_uuid = srcCenterResult.rows[0].id;
+    const dest_uuid = destCenterResult.rows[0].id;
+    srcName = srcCenterResult.rows[0].name;
+    destName = destCenterResult.rows[0].name;
 
-    if (!srcData || Object.keys(srcData).length === 0) {
-      throw new Error(`Item "${itemCode}" does not exist in source center "${sourceCenterId}".`);
-    }
-    if (!destData || Object.keys(destData).length === 0) {
-      throw new Error(`Item "${itemCode}" does not exist in target center "${targetCenterId}".`);
-    }
+    const resourceResult = await client.query('SELECT id, name FROM resources WHERE resource_code = $1', [itemCode]);
+    if (resourceResult.rowCount === 0) throw new Error(`Resource "${itemCode}" does not exist.`);
+    const r_uuid = resourceResult.rows[0].id;
+    resourceName = resourceResult.rows[0].name;
 
-    const srcQty = parseIntSafe(srcData.available_qty);
-    if (srcQty < qtyToTransfer) {
-      throw new Error(`Insufficient inventory at source: requested ${qtyToTransfer}, but only ${srcQty} available.`);
-    }
+    const uuids = [src_uuid, dest_uuid].sort();
+    const invResult = await client.query('SELECT center_id, available_qty, min_threshold FROM inventory WHERE center_id = ANY($1::uuid[]) AND resource_id = $2 FOR UPDATE', [uuids, r_uuid]);
+    
+    let srcInv = invResult.rows.find(r => r.center_id === src_uuid);
+    let destInv = invResult.rows.find(r => r.center_id === dest_uuid);
 
-    const destQty = parseIntSafe(destData.available_qty);
-
-    const newSrcQty = srcQty - qtyToTransfer;
-    const newDestQty = destQty + qtyToTransfer;
-
-    const srcMin = parseIntSafe(srcData.min_threshold);
-    const destMin = parseIntSafe(destData.min_threshold);
-
-    const newSrcStatus = newSrcQty < srcMin ? 'Critical' : 'Adequate';
-    const newDestStatus = newDestQty < destMin ? 'Critical' : 'Adequate';
-
-    // Redis Transaction (Multi) to execute atomically
-    const multi = client.multi();
-
-    multi.hSet(srcResKey, {
-      available_qty: String(newSrcQty),
-      status: newSrcStatus,
-      last_updated: timestamp
-    });
-
-    multi.hSet(destResKey, {
-      available_qty: String(newDestQty),
-      status: newDestStatus,
-      last_updated: timestamp
-    });
-
-    multi.hSet(`idrn:center:metadata:${sourceCenterId}`, 'last_sync', timestamp);
-    multi.hSet(`idrn:center:metadata:${targetCenterId}`, 'last_sync', timestamp);
-
-    await multi.exec();
-
-    const srcMeta = await client.hGetAll(`idrn:center:metadata:${sourceCenterId}`);
-    const destMeta = await client.hGetAll(`idrn:center:metadata:${targetCenterId}`);
-    const srcName = srcMeta.name || sourceCenterId;
-    const destName = destMeta.name || targetCenterId;
-
-    await logMovement({
-      id: 'mvt-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-      timestamp,
-      center_id: sourceCenterId,
-      center_name: srcName,
-      target_center_id: targetCenterId,
-      target_center_name: destName,
-      item_code: itemCode,
-      item_name: srcData.name || itemCode,
-      type: 'transfer',
-      quantity: qtyToTransfer,
-      details: `Transferred ${qtyToTransfer} units of ${srcData.name || itemCode} from ${srcName} to ${destName}.`
-    });
-
-    return {
-      success: true,
-      item_code: itemCode,
-      source: {
-        center_id: sourceCenterId,
-        previous_qty: srcQty,
-        new_qty: newSrcQty,
-        status: newSrcStatus
-      },
-      target: {
-        center_id: targetCenterId,
-        previous_qty: destQty,
-        new_qty: newDestQty,
-        status: newDestStatus
-      }
-    };
-  } else {
-    // Offline local JSON file mode
-    console.log('Redis offline: Executing transfer in local file database.');
-    const localData = await readLocalData();
-
-    const srcCenter = localData.find(c => c.center_id === sourceCenterId);
-    const destCenter = localData.find(c => c.center_id === targetCenterId);
-
-    if (!srcCenter || !destCenter) {
-      throw new Error('One or both centers do not exist in local database.');
+    if (!srcInv) throw new Error(`Inventory record not found for source center "${sourceCenterId}" and resource "${itemCode}".`);
+    if (!destInv) {
+      await client.query('INSERT INTO inventory (center_id, resource_id, available_qty, min_threshold) VALUES ($1, $2, $3, $4)', [dest_uuid, r_uuid, 0, 0]);
+      destInv = { available_qty: 0, min_threshold: 0 };
     }
 
-    const srcResource = srcCenter.resources.find(r => r.item_code === itemCode);
-    const destResource = destCenter.resources.find(r => r.item_code === itemCode);
-
-    if (!srcResource || !destResource) {
-      throw new Error(`Resource "${itemCode}" not found in one or both centers.`);
+    if (srcInv.available_qty < qtyToTransfer) {
+      throw new Error(`Insufficient inventory at source: requested ${qtyToTransfer}, but only ${srcInv.available_qty} available.`);
     }
 
-    if (srcResource.available_qty < qtyToTransfer) {
-      throw new Error(`Insufficient inventory at source: requested ${qtyToTransfer}, but only ${srcResource.available_qty} available.`);
-    }
+    newSrcQty = srcInv.available_qty - qtyToTransfer;
+    newDestQty = destInv.available_qty + qtyToTransfer;
 
-    srcResource.available_qty -= qtyToTransfer;
-    destResource.available_qty += qtyToTransfer;
+    srcStatus = newSrcQty < srcInv.min_threshold ? 'Critical' : 'Adequate';
+    destStatus = newDestQty < destInv.min_threshold ? 'Critical' : 'Adequate';
 
-    srcResource.metadata.status = srcResource.available_qty < srcResource.min_threshold ? 'Critical' : 'Adequate';
-    destResource.metadata.status = destResource.available_qty < destResource.min_threshold ? 'Critical' : 'Adequate';
+    await client.query('UPDATE inventory SET available_qty = $1, updated_at = NOW() WHERE center_id = $2 AND resource_id = $3', [newSrcQty, src_uuid, r_uuid]);
+    await client.query('UPDATE inventory SET available_qty = $1, updated_at = NOW() WHERE center_id = $2 AND resource_id = $3', [newDestQty, dest_uuid, r_uuid]);
 
-    srcResource.last_updated = timestamp;
-    destResource.last_updated = timestamp;
+    const reasonStr = `Transferred ${qtyToTransfer} units of ${resourceName} from ${srcName} to ${destName}.`;
 
-    srcCenter.last_sync = timestamp;
-    destCenter.last_sync = timestamp;
+    await client.query(`
+      INSERT INTO inventory_transactions (center_id, resource_id, quantity_change, action_type, reason)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [src_uuid, r_uuid, -qtyToTransfer, 'transfer_out', reasonStr]);
 
-    await writeLocalData(localData);
+    await client.query(`
+      INSERT INTO inventory_transactions (center_id, resource_id, quantity_change, action_type, reason)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [dest_uuid, r_uuid, qtyToTransfer, 'transfer_in', reasonStr]);
 
-    await logMovement({
-      id: 'mvt-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-      timestamp,
-      center_id: sourceCenterId,
-      center_name: srcCenter.center_name,
-      target_center_id: targetCenterId,
-      target_center_name: destCenter.center_name,
-      item_code: itemCode,
-      item_name: srcResource.name,
-      type: 'transfer',
-      quantity: qtyToTransfer,
-      details: `Transferred ${qtyToTransfer} units of ${srcResource.name} from ${srcCenter.center_name} to ${destCenter.center_name}.`
-    });
-
-    return {
-      success: true,
-      item_code: itemCode,
-      source: {
-        center_id: sourceCenterId,
-        new_qty: srcResource.available_qty,
-        status: srcResource.metadata.status
-      },
-      target: {
-        center_id: targetCenterId,
-        new_qty: destResource.available_qty,
-        status: destResource.metadata.status
-      }
-    };
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+
+  let redisSuccess = false;
+  if (isRedisActive()) {
+    try {
+      const rClient = cacheService.getClient();
+      const multi = rClient.multi();
+      multi.hSet(`idrn:center:resource:${sourceCenterId}:${itemCode}`, {
+        available_qty: String(newSrcQty),
+        status: srcStatus,
+        last_updated: timestamp
+      });
+      multi.hSet(`idrn:center:resource:${targetCenterId}:${itemCode}`, {
+        available_qty: String(newDestQty),
+        status: destStatus,
+        last_updated: timestamp
+      });
+      multi.hSet(`idrn:center:metadata:${sourceCenterId}`, 'last_sync', timestamp);
+      multi.hSet(`idrn:center:metadata:${targetCenterId}`, 'last_sync', timestamp);
+      await multi.exec();
+      redisSuccess = true;
+    } catch (redisErr) {
+      console.error('Failed to update Redis after Postgres transfer transaction:', redisErr.message);
+    }
+  }
+
+  await logMovement({
+    id: 'mvt-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+    timestamp,
+    center_id: sourceCenterId,
+    center_name: srcName,
+    target_center_id: targetCenterId,
+    target_center_name: destName,
+    item_code: itemCode,
+    item_name: resourceName,
+    type: 'transfer',
+    quantity: qtyToTransfer,
+    details: `Transferred ${qtyToTransfer} units of ${resourceName} from ${srcName} to ${destName}.`
+  });
+
+  return {
+    success: true,
+    redisSuccess,
+    item_code: itemCode,
+    source: {
+      center_id: sourceCenterId,
+      new_qty: newSrcQty,
+      status: srcStatus
+    },
+    target: {
+      center_id: targetCenterId,
+      new_qty: newDestQty,
+      status: destStatus
+    }
+  };
 }
 
-/**
- * Retrieves all items currently below their minimum thresholds.
- */
 async function checkShortages() {
   const centers = await getAllCenters();
   const shortages = [];
@@ -564,12 +512,6 @@ async function checkShortages() {
   return shortages;
 }
 
-
-
-/**
- * Logs an inventory movement (replenishment, consumption, transfer, spike).
- * Saves to both Redis (LPUSH/LTRIM) and local JSON file fallback.
- */
 async function logMovement(movement) {
   if (isRedisActive()) {
     try {
@@ -581,16 +523,13 @@ async function logMovement(movement) {
     }
   }
 
-  // Dual-writing to local file for absolute offline consistency
   try {
     const movementsPath = path.join(__dirname, '../data/mock_movements.json');
     let movements = [];
     try {
       const raw = await fs.readFile(movementsPath, 'utf8');
       movements = JSON.parse(raw);
-    } catch (e) {
-      // file might not exist yet
-    }
+    } catch (e) {}
     movements.unshift(movement);
     if (movements.length > 100) {
       movements = movements.slice(0, 100);
@@ -601,9 +540,6 @@ async function logMovement(movement) {
   }
 }
 
-/**
- * Retrieves recent movements log (max 100 items).
- */
 async function getRecentMovements() {
   if (isRedisActive()) {
     try {
@@ -633,5 +569,6 @@ module.exports = {
   transferInventory,
   checkShortages,
   logMovement,
-  getRecentMovements
+  getRecentMovements,
+  fetchCentersFromDB
 };
