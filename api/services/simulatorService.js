@@ -1,29 +1,12 @@
 const amqp = require('amqplib');
 const inventoryService = require('./inventoryService');
 
-let mode = 'static'; // 'static' | 'simulation' | 'scenario'
+let mode = 'static'; // 'static' | 'simulation'
 let intervalSeconds = 10;
-let scenario = 'none'; // 'none' | 'flood' | 'cyclone' | 'earthquake'
 let timer = null;
 
 let amqpConnection = null;
 let amqpChannel = null;
-
-// Categories mapped to target scenario items for scenario triggers
-const SCENARIO_ITEMS = {
-  flood: {
-    districts: ['Mumbai Suburban', 'Thane', 'Raigad', 'Ratnagiri'],
-    items: ['IDRN-RE-001', 'IDRN-RE-003', 'IDRN-FOD-501', 'IDRN-WAT-302']
-  },
-  cyclone: {
-    districts: ['Ratnagiri', 'Raigad', 'Thane'],
-    items: ['IDRN-SHT-402', 'IDRN-GEN-601', 'IDRN-LGT-201', 'IDRN-COM-701']
-  },
-  earthquake: {
-    districts: ['Pune', 'Thane', 'Mumbai Suburban', 'Raigad'],
-    items: ['IDRN-MED-101', 'IDRN-SHT-401', 'IDRN-MED-103', 'IDRN-GEN-602']
-  }
-};
 
 /**
  * Establish or reuse RabbitMQ channel
@@ -67,8 +50,6 @@ async function runStep() {
 
     if (mode === 'simulation') {
       await executeRandomEvent(centers);
-    } else if (mode === 'scenario') {
-      await executeScenarioEvent(centers);
     }
   } catch (err) {
     console.error('[SIMULATOR ERROR] Failed running simulator step:', err.message);
@@ -148,79 +129,6 @@ async function executeRandomEvent(centers) {
   }
 }
 
-/**
- * Execute disaster curves (Scenario Mode)
- */
-async function executeScenarioEvent(centers) {
-  const config = SCENARIO_ITEMS[scenario];
-  if (!config) return;
-
-  // Filter centers in vulnerable districts
-  const targetCenters = centers.filter(c => config.districts.includes(c.district));
-  if (targetCenters.length === 0) return;
-
-  const center = selectRandom(targetCenters);
-  
-  // Find scenario items inside the center's resources
-  const items = center.resources.filter(r => config.items.includes(r.item_code));
-  if (items.length === 0) return;
-
-  const resource = selectRandom(items);
-  
-  // Scenarios are consumption heavy to model emergency surges
-  const roll = Math.random();
-
-  if (roll < 0.75) {
-    // 75% chance of severe emergency surge dispatches
-    const drawDownRate = parseFloat((0.35 + Math.random() * 0.35).toFixed(2)); // 35% to 70% drawdown
-    const drawdown = Math.round(resource.available_qty * drawDownRate);
-    const actualReduction = drawdown > 0 ? -drawdown : (resource.available_qty > 0 ? -1 : 0);
-    await publishToQueue({
-      centerCode: center.center_id,
-      resourceCode: resource.item_code,
-      quantityChange: actualReduction,
-      actionType: 'dispatch',
-      notes: `${scenario.toUpperCase()} DISASTER ONSET: Drawdown ${Math.round(drawDownRate * 100)}% on ${resource.name} at ${center.center_name}`
-    });
-  } else if (roll < 0.90) {
-    // 15% chance of critical supply transfer into the disaster zone
-    const sourceCenters = centers.filter(c => !config.districts.includes(c.district));
-    if (sourceCenters.length === 0) return;
-
-    const sourceCenter = selectRandom(sourceCenters);
-    const sourceRes = sourceCenter.resources.find(r => r.item_code === resource.item_code);
-    if (!sourceRes || sourceRes.available_qty < 5) return;
-
-    const transferQty = Math.min(15, Math.floor(sourceRes.available_qty / 2));
-    if (transferQty === 0) return;
-
-    await publishToQueue({
-      centerCode: sourceCenter.center_id,
-      resourceCode: resource.item_code,
-      quantityChange: -transferQty,
-      actionType: 'transfer_out',
-      notes: `Emergency Relief Dispatch: Relocating ${transferQty} units of ${resource.name} to emergency zone ${center.center_name}`
-    });
-    await publishToQueue({
-      centerCode: center.center_id,
-      resourceCode: resource.item_code,
-      quantityChange: transferQty,
-      actionType: 'transfer_in',
-      notes: `Emergency Relief Dispatch: Receiving ${transferQty} units of ${resource.name} from fallback center ${sourceCenter.center_name}`
-    });
-  } else {
-    // 10% chance of critical emergency replenishment airlift
-    const qty = Math.floor(Math.random() * 60) + 20; // 20 to 80 units airlifted in
-    await publishToQueue({
-      centerCode: center.center_id,
-      resourceCode: resource.item_code,
-      quantityChange: qty,
-      actionType: 'restock',
-      notes: `Emergency Airlift: Dropping +${qty} units of ${resource.name} to ${center.center_name}`
-    });
-  }
-}
-
 function selectRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -228,19 +136,18 @@ function selectRandom(arr) {
 /**
  * Configure simulator properties
  */
-function configure(newMode, newInterval, newScenario = 'none') {
-  console.log(`[SIMULATOR] Reconfiguring: mode=${newMode}, interval=${newInterval}s, scenario=${newScenario}`);
+function configure(newMode, newInterval) {
+  console.log(`[SIMULATOR] Reconfiguring: mode=${newMode}, interval=${newInterval}s`);
   
   mode = newMode;
   intervalSeconds = parseInt(newInterval, 10) || 10;
-  scenario = newScenario;
 
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
 
-  if (mode === 'simulation' || mode === 'scenario') {
+  if (mode === 'simulation') {
     timer = setInterval(runStep, intervalSeconds * 1000);
     // Trigger immediate run on configure
     runStep();
@@ -248,7 +155,7 @@ function configure(newMode, newInterval, newScenario = 'none') {
 }
 
 module.exports = {
-  getStatus: () => ({ mode, intervalSeconds, scenario }),
+  getStatus: () => ({ mode, intervalSeconds }),
   configure,
   triggerManualEvent: async (endpoint, payload) => {
     console.log('[SIMULATOR] Manually triggering event:', endpoint, payload);

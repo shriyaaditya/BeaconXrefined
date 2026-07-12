@@ -1,27 +1,25 @@
 const simulatorService = require('../services/simulatorService');
 require('dotenv').config();
 
-// Usage: node scripts/setSimulatorMode.js <mode> <intervalSeconds> [scenario]
-// mode: static | simulation | scenario
+// Usage: node scripts/setSimulatorMode.js <mode> <intervalSeconds>
+// mode: static | simulation
 // intervalSeconds: integer (seconds)
-// scenario (optional): flood | cyclone | earthquake (only for scenario mode)
 
 async function main() {
-  const [, , modeArg, intervalArg, scenarioArg] = process.argv;
+  const [, , modeArg, intervalArg] = process.argv;
   if (!modeArg) {
     console.error('Missing mode argument.');
-    console.error('Usage: node scripts/setSimulatorMode.js <mode> <intervalSeconds> [scenario]');
+    console.error('Usage: node scripts/setSimulatorMode.js <mode> <intervalSeconds>');
     process.exit(1);
   }
 
   const mode = modeArg;
   const intervalSeconds = parseInt(intervalArg, 10) || 10;
-  const scenario = scenarioArg || 'none';
 
   try {
     // Simulator configure is synchronous, but we wrap in async for consistency
-    simulatorService.configure(mode, intervalSeconds, scenario);
-    console.log('✅ Simulator reconfigured:', { mode, intervalSeconds, scenario });
+    simulatorService.configure(mode, intervalSeconds);
+    console.log('✅ Simulator reconfigured:', { mode, intervalSeconds });
   } catch (err) {
     console.error('❌ Failed to reconfigure simulator:', err.message);
     process.exit(1);

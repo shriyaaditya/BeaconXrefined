@@ -103,7 +103,7 @@ export default function Analyze() {
   // Calculate KPIs
   const kpis = useMemo(() => {
     const totalResources = warehouseData.length;
-    const criticalResources = warehouseData.filter(r => r.metadata.status === "CRITICAL" || (r.runout_hours !== null && r.runout_hours < 24)).length;
+    const criticalResources = warehouseData.filter(r => r.metadata.status === "CRITICAL" || (r.runout_hours !== null && r.runout_hours !== undefined && r.runout_hours < 24)).length;
     
     const validBurnRates = warehouseData.filter(r => r.burn_rate !== undefined && r.burn_rate > 0);
     const avgBurnRate = validBurnRates.length > 0 

@@ -12,12 +12,12 @@ router.get('/status', (req, res) => {
 
 // Configure modes
 router.post('/configure', (req, res) => {
-  const { mode, intervalSeconds, scenario } = req.body;
+  const { mode, intervalSeconds } = req.body;
 
-  if (!mode || !['static', 'simulation', 'scenario'].includes(mode)) {
+  if (!mode || !['static', 'simulation'].includes(mode)) {
     return res.status(400).json({
       status: 'error',
-      message: 'Invalid mode. Mode must be static, simulation, or scenario.'
+      message: 'Invalid mode. Mode must be static or simulation.'
     });
   }
 
@@ -29,15 +29,7 @@ router.post('/configure', (req, res) => {
     });
   }
 
-  const activeScenario = scenario || 'none';
-  if (mode === 'scenario' && !['flood', 'cyclone', 'earthquake'].includes(activeScenario)) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'Scenario must be flood, cyclone, or earthquake when in scenario mode.'
-    });
-  }
-
-  simulatorService.configure(mode, interval, activeScenario);
+  simulatorService.configure(mode, interval);
 
   return res.status(200).json({
     status: 'success',
