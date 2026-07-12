@@ -1,4 +1,5 @@
 const inventoryService = require('../services/inventoryService');
+const analyticsService = require('../services/analyticsService');
 
 /**
  * Controller to handle manual/automatic inventory adjustments (increase/decrease/replenish/consume)
@@ -79,7 +80,8 @@ async function transferInventory(req, res) {
  */
 async function getShortages(req, res) {
   try {
-    const shortages = await inventoryService.checkShortages();
+    const centers = await inventoryService.getAllCenters();
+    const shortages = analyticsService.checkShortages(centers);
     return res.status(200).json({
       status: 'success',
       count: shortages.length,

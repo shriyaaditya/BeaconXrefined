@@ -71,6 +71,7 @@ async function executeRandomEvent(centers) {
     // 40% chance of Truck Arrival / Replenishment (+ stock)
     const qty = Math.floor(Math.random() * 45) + 5; // 5 to 50
     await publishToQueue({
+      eventType: 'inventory_adjustment',
       centerCode: center.center_id,
       resourceCode: resource.item_code,
       quantityChange: qty,
@@ -79,8 +80,9 @@ async function executeRandomEvent(centers) {
     });
   } else if (roll < 0.80) {
     // 40% chance of Emergency Dispatch (- stock)
-    const qty = Math.floor(Math.random() * 20) + 2; // 2 to 22
+    const qty = Math.floor(Math.random() * 30) + 2; // 2 to 32
     await publishToQueue({
+      eventType: 'inventory_adjustment',
       centerCode: center.center_id,
       resourceCode: resource.item_code,
       quantityChange: -qty,
@@ -99,20 +101,14 @@ async function executeRandomEvent(centers) {
     const transferQty = Math.min(qty, srcQty);
     if (transferQty === 0) return;
 
-    // Publish two separate leg updates to the queue
+    // Publish a single atomic transfer event to the queue
     await publishToQueue({
-      centerCode: center.center_id,
+      eventType: 'inventory_transfer',
+      sourceCenterCode: center.center_id,
+      targetCenterCode: targetCenter.center_id,
       resourceCode: resource.item_code,
-      quantityChange: -transferQty,
-      actionType: 'transfer_out',
+      quantity: transferQty,
       notes: `Transfer: Moving ${transferQty} units of ${resource.name} to ${targetCenter.center_name}`
-    });
-    await publishToQueue({
-      centerCode: targetCenter.center_id,
-      resourceCode: resource.item_code,
-      quantityChange: transferQty,
-      actionType: 'transfer_in',
-      notes: `Transfer: Receiving ${transferQty} units of ${resource.name} from ${center.center_name}`
     });
   } else {
     // 5% chance of sudden drawdown spike
@@ -120,6 +116,7 @@ async function executeRandomEvent(centers) {
     const drawdown = Math.round(resource.available_qty * pct);
     const actualReduction = drawdown > 0 ? -drawdown : (resource.available_qty > 0 ? -1 : 0);
     await publishToQueue({
+      eventType: 'inventory_adjustment',
       centerCode: center.center_id,
       resourceCode: resource.item_code,
       quantityChange: actualReduction,
@@ -138,7 +135,7 @@ function selectRandom(arr) {
  */
 function configure(newMode, newInterval) {
   console.log(`[SIMULATOR] Reconfiguring: mode=${newMode}, interval=${newInterval}s`);
-  
+
   mode = newMode;
   intervalSeconds = parseInt(newInterval, 10) || 10;
 
@@ -159,11 +156,12 @@ module.exports = {
   configure,
   triggerManualEvent: async (endpoint, payload) => {
     console.log('[SIMULATOR] Manually triggering event:', endpoint, payload);
-    
+
     if (endpoint === '/adjust') {
       const change = parseInt(payload.quantityChange, 10) || 0;
       const isReplenish = payload.type === 'replenish' || change > 0;
       await publishToQueue({
+        eventType: 'inventory_adjustment',
         centerCode: payload.centerId,
         resourceCode: payload.itemCode,
         quantityChange: change,
@@ -180,6 +178,7 @@ module.exports = {
       const actualReduction = drawdown > 0 ? -drawdown : (currentQty > 0 ? -1 : 0);
 
       await publishToQueue({
+        eventType: 'inventory_adjustment',
         centerCode: payload.centerId,
         resourceCode: payload.itemCode,
         quantityChange: actualReduction,
@@ -189,18 +188,12 @@ module.exports = {
     } else if (endpoint === '/transfer') {
       const qty = parseInt(payload.quantity, 10) || 0;
       await publishToQueue({
-        centerCode: payload.sourceCenterId,
+        eventType: 'inventory_transfer',
+        sourceCenterCode: payload.sourceCenterId,
+        targetCenterCode: payload.targetCenterId,
         resourceCode: payload.itemCode,
-        quantityChange: -qty,
-        actionType: 'transfer_out',
-        notes: `Manual transfer to ${payload.targetCenterId}`
-      });
-      await publishToQueue({
-        centerCode: payload.targetCenterId,
-        resourceCode: payload.itemCode,
-        quantityChange: qty,
-        actionType: 'transfer_in',
-        notes: `Manual transfer from ${payload.sourceCenterId}`
+        quantity: qty,
+        notes: `Manual transfer from ${payload.sourceCenterId} to ${payload.targetCenterId}`
       });
     }
   }

@@ -1,7 +1,6 @@
-const fs = require('fs').promises;
-const path = require('path');
 const cacheService = require('./cacheService');
 const dbService = require('./dbService');
+const analyticsService = require('./analyticsService');
 
 function isRedisActive() {
   return cacheService.getIsRedisConnected();
@@ -11,10 +10,15 @@ function parseIntSafe(val, defaultVal = 0) {
   const parsed = parseInt(val, 10);
   return isNaN(parsed) ? defaultVal : parsed;
 }
+
 function parseFloatSafe(val, defaultVal = 0) {
   const parsed = parseFloat(val);
   return isNaN(parsed) ? defaultVal : parsed;
 }
+
+
+
+
 
 async function fetchCentersFromDB() {
   const query = `
@@ -86,7 +90,7 @@ async function getAllCenters() {
 
   try {
     const movements = await getRecentMovements();
-    centers = attachMetrics(centers, movements);
+    centers = analyticsService.attachMetrics(centers, movements);
   } catch (err) {
     console.error('Failed to attach EOC operational metrics:', err.message);
   }
@@ -94,68 +98,6 @@ async function getAllCenters() {
   return centers;
 }
 
-function attachMetrics(centers, movements) {
-  const BASELINES = {
-    'Rescue Equipment': 0.1,
-    'Medical Supplies': 0.8,
-    'Lighting & Power': 0.2,
-    'Water & Sanitation': 1.5,
-    'Shelter & Camps': 0.5,
-    'Food & Survival': 4.0,
-    'Communication': 0.1,
-    'Emergency Vehicles': 0.05
-  };
-
-  return centers.map(center => {
-    let scoreWeight = 0;
-    const resources = center.resources.map(res => {
-      const relevantMovements = movements.filter(m =>
-        m.center_id === center.center_id &&
-        m.item_code === res.item_code &&
-        (m.type === 'consume' || m.type === 'spike' || m.type === 'transfer')
-      );
-
-      let totalDrawdown = 0;
-      relevantMovements.forEach(m => {
-        if (m.type === 'transfer') {
-          totalDrawdown += m.quantity; 
-        } else {
-          totalDrawdown += Math.abs(m.quantity); 
-        }
-      });
-
-      const dynamicBurn = totalDrawdown / 12;
-      const category = res.metadata.category || 'Default';
-      const baseline = BASELINES[category] || 0.1;
-      const burnRate = parseFloat((baseline + dynamicBurn).toFixed(2));
-
-      let runoutHours = null;
-      if (burnRate > 0) {
-        runoutHours = parseFloat((res.available_qty / burnRate).toFixed(1));
-      }
-
-      const threshold = res.min_threshold || 1;
-      const ratio = res.available_qty / threshold;
-      scoreWeight += Math.min(ratio, 1.0);
-
-      return {
-        ...res,
-        burn_rate: burnRate,
-        runout_hours: runoutHours
-      };
-    });
-
-    const readinessScore = resources.length > 0
-      ? Math.round((scoreWeight / resources.length) * 100)
-      : 100;
-
-    return {
-      ...center,
-      resources,
-      readiness_score: readinessScore
-    };
-  });
-}
 
 async function getCenter(centerId) {
   if (!isRedisActive()) {
@@ -289,7 +231,7 @@ async function adjustInventory(centerId, itemCode, quantityChange, type = 'adjus
     try {
       const rClient = cacheService.getClient();
       const resourceKey = `idrn:center:resource:${centerId}:${itemCode}`;
-      
+
       const resData = await rClient.hGetAll(resourceKey);
       if (resData && Object.keys(resData).length > 0) {
         await rClient.hSet(resourceKey, {
@@ -361,7 +303,7 @@ async function transferInventory(sourceCenterId, targetCenterId, itemCode, quant
   let srcName = sourceCenterId;
   let destName = targetCenterId;
   let resourceName = itemCode;
-  
+
   let newSrcQty = 0;
   let newDestQty = 0;
   let srcStatus = '';
@@ -374,7 +316,7 @@ async function transferInventory(sourceCenterId, targetCenterId, itemCode, quant
     const destCenterResult = await client.query('SELECT id, name FROM centers WHERE center_code = $1', [targetCenterId]);
     if (srcCenterResult.rowCount === 0) throw new Error(`Source Center "${sourceCenterId}" does not exist.`);
     if (destCenterResult.rowCount === 0) throw new Error(`Target Center "${targetCenterId}" does not exist.`);
-    
+
     const src_uuid = srcCenterResult.rows[0].id;
     const dest_uuid = destCenterResult.rows[0].id;
     srcName = srcCenterResult.rows[0].name;
@@ -387,7 +329,7 @@ async function transferInventory(sourceCenterId, targetCenterId, itemCode, quant
 
     const uuids = [src_uuid, dest_uuid].sort();
     const invResult = await client.query('SELECT center_id, available_qty, min_threshold FROM inventory WHERE center_id = ANY($1::uuid[]) AND resource_id = $2 FOR UPDATE', [uuids, r_uuid]);
-    
+
     let srcInv = invResult.rows.find(r => r.center_id === src_uuid);
     let destInv = invResult.rows.find(r => r.center_id === dest_uuid);
 
@@ -485,60 +427,6 @@ async function transferInventory(sourceCenterId, targetCenterId, itemCode, quant
   };
 }
 
-async function checkShortages() {
-  const centers = await getAllCenters();
-  const shortages = [];
-
-  centers.forEach(center => {
-    center.resources.forEach(res => {
-      if (res.available_qty < res.min_threshold) {
-        shortages.push({
-          center_id: center.center_id,
-          center_name: center.center_name,
-          district: center.district,
-          region: center.region,
-          item_code: res.item_code,
-          name: res.name,
-          available_qty: res.available_qty,
-          min_threshold: res.min_threshold,
-          deficit: res.min_threshold - res.available_qty,
-          category: res.metadata.category,
-          unit: res.metadata.unit
-        });
-      }
-    });
-  });
-
-  return shortages;
-}
-
-async function logMovement(movement) {
-  if (isRedisActive()) {
-    try {
-      const client = cacheService.getClient();
-      await client.lPush('idrn:movements', JSON.stringify(movement));
-      await client.lTrim('idrn:movements', 0, 99);
-    } catch (err) {
-      console.error('Failed to log movement to Redis:', err.message);
-    }
-  }
-
-  try {
-    const movementsPath = path.join(__dirname, '../data/mock_movements.json');
-    let movements = [];
-    try {
-      const raw = await fs.readFile(movementsPath, 'utf8');
-      movements = JSON.parse(raw);
-    } catch (e) {}
-    movements.unshift(movement);
-    if (movements.length > 100) {
-      movements = movements.slice(0, 100);
-    }
-    await fs.writeFile(movementsPath, JSON.stringify(movements, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Failed to log movement to local file:', err.message);
-  }
-}
 
 async function getRecentMovements() {
   if (isRedisActive()) {
@@ -553,11 +441,26 @@ async function getRecentMovements() {
     }
   }
 
+  // Fallback: query Postgres inventory_transactions table
   try {
-    const movementsPath = path.join(__dirname, '../data/mock_movements.json');
-    const raw = await fs.readFile(movementsPath, 'utf8');
-    return JSON.parse(raw);
+    const result = await dbService.query(
+      `SELECT center_id, center_name, item_code, item_name, quantity, type, notes, timestamp
+       FROM inventory_transactions
+       ORDER BY timestamp DESC
+       LIMIT 100`
+    );
+    return result.rows.map(row => ({
+      center_id: row.center_id,
+      center_name: row.center_name,
+      item_code: row.item_code,
+      item_name: row.item_name,
+      quantity: row.quantity,
+      type: row.type,
+      notes: row.notes,
+      timestamp: row.timestamp
+    }));
   } catch (e) {
+    console.error('Failed to retrieve movements from database:', e.message);
     return [];
   }
 }
@@ -567,7 +470,6 @@ module.exports = {
   getCenter,
   adjustInventory,
   transferInventory,
-  checkShortages,
   logMovement,
   getRecentMovements,
   fetchCentersFromDB

@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const simulatorService = require('../services/simulatorService');
+const warehouseSimulatorService = require('../services/warehouseSimulator.js');
 
 // Retrieve active state
 router.get('/status', (req, res) => {
   return res.status(200).json({
     status: 'success',
-    data: simulatorService.getStatus()
+    data: warehouseSimulatorService.getStatus()
   });
 });
 
@@ -29,12 +29,12 @@ router.post('/configure', (req, res) => {
     });
   }
 
-  simulatorService.configure(mode, interval);
+  warehouseSimulatorService.configure(mode, interval);
 
   return res.status(200).json({
     status: 'success',
     message: 'Simulator successfully reconfigured.',
-    data: simulatorService.getStatus()
+    data: warehouseSimulatorService.getStatus()
   });
 });
 
@@ -50,7 +50,7 @@ router.post('/trigger', async (req, res) => {
   }
 
   try {
-    await simulatorService.triggerManualEvent(endpoint, payload);
+    await warehouseSimulatorService.triggerManualEvent(endpoint, payload);
     return res.status(200).json({
       status: 'success',
       message: 'Manual gateway event triggered and queued successfully.'
